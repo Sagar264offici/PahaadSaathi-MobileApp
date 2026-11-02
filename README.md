@@ -396,3 +396,9 @@ See [`LICENSE`](LICENSE) for the project license.
   <br />
   <sub>Stay aware. Share responsibly. Never replace official emergency guidance with an app alert.</sub>
 </div>
+## COre Team
+
+1. Sagar : https://github.com/Sagar264offici
+2. Aryan Jethuri : https://github.com/arrya06
+3. Aayushi Sharma
+4. Abhishek Chamoli
