@@ -27,7 +27,7 @@
       "versionCode": 3
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

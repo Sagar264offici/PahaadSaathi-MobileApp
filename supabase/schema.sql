@@ -352,11 +352,64 @@ create policy "Anyone can view storage objects"
   on storage.objects for select using (true);
 
 -- ============================================================
+-- SECTION 6b: REPORTER PHONE & VERIFICATION LOG
+-- ============================================================
+
+-- Add reporter_phone to hazards (safe if already exists)
+alter table public.hazards add column if not exists reporter_phone text;
+
+-- Verification log: each authority action on a report
+create table if not exists public.verification_log (
+  id          uuid primary key default gen_random_uuid(),
+  hazard_id   uuid references public.hazards(id) on delete cascade not null,
+  officer_id  text not null,                        -- auth.uid() or 'unknown' for demo
+  action      text not null check (action in ('called', 'verified', 'dismissed')),
+  reason      text,
+  created_at  timestamptz default now()
+);
+
+alter table public.verification_log enable row level security;
+
+drop policy if exists "Moderators can view verification log" on public.verification_log;
+create policy "Moderators can view verification log"
+  on public.verification_log for select using (true);
+
+drop policy if exists "Officers can insert verification log" on public.verification_log;
+create policy "Officers can insert verification log"
+  on public.verification_log for insert with check (true);
+
+-- ============================================================
 -- SECTION 7: REALTIME SUBSCRIPTIONS
 -- ============================================================
 
--- Enable realtime for key tables
-alter publication supabase_realtime add table public.hazards;
-alter publication supabase_realtime add table public.official_alerts;
-alter publication supabase_realtime add table public.community_posts;
-alter publication supabase_realtime add table public.help_requests;
+-- Enable realtime for key tables (safe to re-run)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'hazards'
+  ) then
+    alter publication supabase_realtime add table public.hazards;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'official_alerts'
+  ) then
+    alter publication supabase_realtime add table public.official_alerts;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'community_posts'
+  ) then
+    alter publication supabase_realtime add table public.community_posts;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'help_requests'
+  ) then
+    alter publication supabase_realtime add table public.help_requests;
+  end if;
+end $$;

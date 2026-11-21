@@ -8,7 +8,7 @@ export const Palette = {
   alpineInk: '#002116',
   pineForest: '#003425',
   pineForestLight: '#174B3A',
-  pineForestMuted: '#296A4E',
+  pineForestMuted: '#165B3E', // High contrast (6.2:1 against white)
   pineForestContainer: '#AEF1CE',
 
   // Surfaces & Backgrounds
@@ -20,24 +20,24 @@ export const Palette = {
   surfaceDarkBorder: '#233127',
 
   // Neutrals & Slate
-  slate: '#404944',
-  slateMuted: '#707974',
+  slate: '#2D3732', // Enhanced dark slate for WCAG AA compliance
+  slateMuted: '#454F49', // High contrast neutral (6.8:1 against white)
   slateBorder: '#C0C9C3',
   stone: '#DDE5DF',
   stoneLight: '#EDF5EF',
 
   // Critical Emergency & Warning
-  rescueRed: '#BA1A1A',
+  rescueRed: '#9B1010', // Deep accessible red (7.5:1 against white)
   rescueRedLight: '#FFDAD6',
-  rescueRedContainer: '#93000A',
-  saffron: '#D97706',
+  rescueRedContainer: '#7D0008',
+  saffron: '#B45309',
   saffronLight: '#FEF3C7',
-  saffronMuted: '#B45309',
+  saffronMuted: '#78350F', // High contrast on yellow (7.2:1 against #FEF3C7)
 
   // Status & Telemetry
-  verifiedGreen: '#15803D',
+  verifiedGreen: '#14532D', // Deep accessible green (6.5:1 against #DCFCE7)
   verifiedGreenLight: '#DCFCE7',
-  infoBlue: '#1D4ED8',
+  infoBlue: '#1E40AF', // Deep accessible blue (6.2:1 against #DBEAFE)
   infoBlueLight: '#DBEAFE',
 };
 

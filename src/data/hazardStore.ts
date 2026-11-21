@@ -49,6 +49,7 @@ export type Hazard = {
   sample: boolean;
   reportedBy?: string;
   reportedByRole?: string;
+  reporterPhone?: string | null;
   fromCache?: boolean;
   latitude: number | null;
   longitude: number | null;
@@ -249,9 +250,8 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
 export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'created_at' | 'updated_at'>): Promise<void> {
   ensureDbInit();
 
-  if (!isModerator()) {
-    throw new Error("Only authorized moderators can submit incident reports.");
-  }
+  // Allow residents to submit too — moderator check removed for open reporting
+  // (Authorities verify real vs fake in control room)
 
   const id = String(Date.now());
   const now = new Date();

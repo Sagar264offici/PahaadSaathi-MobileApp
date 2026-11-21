@@ -8,6 +8,7 @@ export function SmoothScrollView(props: ScrollViewProps) {
       keyboardDismissMode="on-drag"
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
+      {...({ tabIndex: 0 } as any)}
       {...props}
     />
   );

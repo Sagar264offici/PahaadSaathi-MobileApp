@@ -103,6 +103,8 @@ export default function HomeScreen() {
 
       {/* Header */}
       <View
+        accessibilityRole="header"
+        {...({ role: 'banner' } as any)}
         style={[
           styles.header,
           {
@@ -137,6 +139,9 @@ export default function HomeScreen() {
           <Pressable
             style={styles.langToggle}
             onPress={() => setSelectedLanguage(selectedLanguage === 'en' ? 'hi' : 'en')}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle Language"
+            {...({ role: 'button' } as any)}
           >
             <Text style={styles.langText}>
               {selectedLanguage === 'en' ? 'हिन्दी' : 'EN'}
@@ -146,275 +151,309 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Connectivity & Offline Banner */}
-      <NetworkIndicator status={connectivityState} />
-      <OfflineBanner
-        pendingCount={queueCount}
-        syncing={syncing}
-        onSyncPress={handleSyncQueue}
-      />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* Main Landmark Container */}
+      <View
+        accessibilityRole="main"
+        {...({ role: 'main' } as any)}
+        style={styles.mainContainer}
       >
-        {/* Urgent Primary SOS Trigger Banner */}
-        <Pressable
-          style={styles.sosEmergencyBanner}
-          onPress={() => router.push('/emergency')}
-          accessibilityRole="button"
-          accessibilityLabel="Open Emergency Assistance SOS"
+        {/* Connectivity & Offline Banner */}
+        <NetworkIndicator status={connectivityState} />
+        <OfflineBanner
+          pendingCount={queueCount}
+          syncing={syncing}
+          onSyncPress={handleSyncQueue}
+        />
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          {...({ tabIndex: 0, 'aria-label': 'Main Content' } as any)}
         >
-          <View style={styles.sosBannerLeft}>
-            <View style={styles.sosPulseIcon}>
-              <ShieldAlert size={28} color={Palette.snow} />
+          {/* Urgent Primary SOS Trigger Banner */}
+          <Pressable
+            style={styles.sosEmergencyBanner}
+            onPress={() => router.push('/emergency')}
+            accessibilityRole="button"
+            accessibilityLabel="Open Emergency Assistance SOS"
+            {...({ role: 'button' } as any)}
+          >
+            <View style={styles.sosBannerLeft}>
+              <View style={styles.sosPulseIcon}>
+                <ShieldAlert size={28} color={Palette.snow} />
+              </View>
+              <View style={styles.sosBannerTextGroup}>
+                <Text style={styles.sosBannerTitle}>EMERGENCY ASSISTANCE (SOS)</Text>
+                <Text style={styles.sosBannerSub}>
+                  1-Touch Disaster Dispatch • GPS Telemetry • Offline SMS Fallback
+                </Text>
+              </View>
             </View>
-            <View style={styles.sosBannerTextGroup}>
-              <Text style={styles.sosBannerTitle}>EMERGENCY ASSISTANCE (SOS)</Text>
-              <Text style={styles.sosBannerSub}>
-                1-Touch Disaster Dispatch • GPS Telemetry • Offline SMS Fallback
+            <ChevronRight size={22} color={Palette.snow} />
+          </Pressable>
+
+          {/* Core Actions Grid */}
+          <View style={styles.actionGrid}>
+            <Pressable
+              style={[
+                styles.actionTile,
+                {
+                  backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
+                  borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
+                },
+              ]}
+              onPress={() => router.push('/report')}
+              accessibilityRole="button"
+              accessibilityLabel="Report Hazard: Landslides, washouts, road blocks"
+              {...({ role: 'button' } as any)}
+            >
+              <View style={[styles.tileIconCircle, { backgroundColor: Palette.saffronLight }]}>
+                <AlertTriangle size={22} color={Palette.saffron} />
+              </View>
+              <Text
+                style={[
+                  styles.tileTitle,
+                  { color: isDark ? Palette.snow : Palette.pineForest },
+                ]}
+              >
+                Report Hazard
               </Text>
-            </View>
+              <Text style={styles.tileSub}>Landslides, washouts, road blocks</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.actionTile,
+                {
+                  backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
+                  borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
+                },
+              ]}
+              onPress={() => router.push('/community' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Community Aid: Help exchange, local feed & volunteers"
+              {...({ role: 'button' } as any)}
+            >
+              <View style={[styles.tileIconCircle, { backgroundColor: Palette.pineForestContainer }]}>
+                <Users size={22} color={Palette.pineForest} />
+              </View>
+              <Text
+                style={[
+                  styles.tileTitle,
+                  { color: isDark ? Palette.snow : Palette.pineForest },
+                ]}
+              >
+                Community Aid
+              </Text>
+              <Text style={styles.tileSub}>Help exchange, local feed & volunteers</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.actionTile,
+                {
+                  backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
+                  borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
+                },
+              ]}
+              onPress={() => router.push('/map')}
+              accessibilityRole="button"
+              accessibilityLabel="Hazard Map: Shelters, routes & blocked passes"
+              {...({ role: 'button' } as any)}
+            >
+              <View style={[styles.tileIconCircle, { backgroundColor: Palette.infoBlueLight }]}>
+                <MapPin size={22} color={Palette.infoBlue} />
+              </View>
+              <Text
+                style={[
+                  styles.tileTitle,
+                  { color: isDark ? Palette.snow : Palette.pineForest },
+                ]}
+              >
+                Hazard Map
+              </Text>
+              <Text style={styles.tileSub}>Shelters, routes & blocked passes</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.actionTile,
+                {
+                  backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
+                  borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
+                },
+              ]}
+              onPress={() => router.push('/control-room' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Control Room: DDMA & SDRF incident verification"
+              {...({ role: 'button' } as any)}
+            >
+              <View style={[styles.tileIconCircle, { backgroundColor: Palette.verifiedGreenLight }]}>
+                <Building2 size={22} color={Palette.verifiedGreen} />
+              </View>
+              <Text
+                style={[
+                  styles.tileTitle,
+                  { color: isDark ? Palette.snow : Palette.pineForest },
+                ]}
+              >
+                Control Room
+              </Text>
+              <Text style={styles.tileSub}>DDMA & SDRF incident verification</Text>
+            </Pressable>
           </View>
-          <ChevronRight size={22} color={Palette.snow} />
-        </Pressable>
 
-        {/* Core Actions Grid */}
-        <View style={styles.actionGrid}>
-          <Pressable
-            style={[
-              styles.actionTile,
-              {
-                backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
-                borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
-              },
-            ]}
-            onPress={() => router.push('/report')}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: Palette.saffronLight }]}>
-              <AlertTriangle size={22} color={Palette.saffron} />
-            </View>
-            <Text
-              style={[
-                styles.tileTitle,
-                { color: isDark ? Palette.snow : Palette.pineForest },
-              ]}
-            >
-              Report Hazard
-            </Text>
-            <Text style={styles.tileSub}>Landslides, washouts, road blocks</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.actionTile,
-              {
-                backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
-                borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
-              },
-            ]}
-            onPress={() => router.push('/community' as any)}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: Palette.pineForestContainer }]}>
-              <Users size={22} color={Palette.pineForest} />
-            </View>
-            <Text
-              style={[
-                styles.tileTitle,
-                { color: isDark ? Palette.snow : Palette.pineForest },
-              ]}
-            >
-              Community Aid
-            </Text>
-            <Text style={styles.tileSub}>Help exchange, local feed & volunteers</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.actionTile,
-              {
-                backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
-                borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
-              },
-            ]}
-            onPress={() => router.push('/map')}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: Palette.infoBlueLight }]}>
-              <MapPin size={22} color={Palette.infoBlue} />
-            </View>
-            <Text
-              style={[
-                styles.tileTitle,
-                { color: isDark ? Palette.snow : Palette.pineForest },
-              ]}
-            >
-              Hazard Map
-            </Text>
-            <Text style={styles.tileSub}>Shelters, routes & blocked passes</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.actionTile,
-              {
-                backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
-                borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
-              },
-            ]}
-            onPress={() => router.push('/control-room' as any)}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: Palette.verifiedGreenLight }]}>
-              <Building2 size={22} color={Palette.verifiedGreen} />
-            </View>
-            <Text
-              style={[
-                styles.tileTitle,
-                { color: isDark ? Palette.snow : Palette.pineForest },
-              ]}
-            >
-              Control Room
-            </Text>
-            <Text style={styles.tileSub}>DDMA & SDRF incident verification</Text>
-          </Pressable>
-        </View>
-
-        {/* Active Local Mountain Hazards */}
-        <View style={styles.sectionHeaderRow}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: isDark ? Palette.snow : Palette.pineForest },
-            ]}
-          >
-            Active Mountain Hazards & Alerts
-          </Text>
-          <Pressable onPress={() => router.push('/map')}>
-            <Text style={styles.viewAllText}>View Map →</Text>
-          </Pressable>
-        </View>
-
-        {hazards.slice(0, 3).map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.incidentCard,
-              {
-                backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
-                borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
-              },
-            ]}
-          >
-            <View style={styles.incidentTop}>
-              <Badge label={item.type} variant="brand" />
-              <StatusLabel status={item.status} />
-            </View>
-            <Text
-              style={[
-                styles.incidentLocation,
-                { color: isDark ? Palette.snow : Palette.pineForest },
-              ]}
-            >
-              {item.location}
-            </Text>
-            <Text
-              style={[
-                styles.incidentDesc,
-                { color: isDark ? Palette.stone : Palette.slate },
-              ]}
-            >
-              {item.description}
-            </Text>
-          </View>
-        ))}
-
-        {/* Offline Bilingual Safety Guides */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionTitleGroup}>
-            <BookOpen size={18} color={Palette.pineForestMuted} />
+          {/* Active Local Mountain Hazards */}
+          <View style={styles.sectionHeaderRow}>
             <Text
               style={[
                 styles.sectionTitle,
                 { color: isDark ? Palette.snow : Palette.pineForest },
               ]}
             >
-              {selectedLanguage === 'en'
-                ? 'Offline Mountain Safety Guides'
-                : 'पर्वतीय आपदा सुरक्षा निर्देशिका'}
+              Active Mountain Hazards & Alerts
             </Text>
+            <Pressable
+              onPress={() => router.push('/map')}
+              accessibilityRole="link"
+              accessibilityLabel="View Hazards Map"
+              {...({ role: 'link' } as any)}
+            >
+              <Text style={styles.viewAllText}>View Map →</Text>
+            </Pressable>
           </View>
-        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.guidesScroll}>
-          {MOUNTAIN_SAFETY_GUIDES.map((guide) => (
+          {hazards.slice(0, 3).map((item) => (
             <View
-              key={guide.id}
+              key={item.id}
               style={[
-                styles.guideCard,
+                styles.incidentCard,
                 {
                   backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
                   borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
                 },
               ]}
             >
-              <Badge
-                label={guide.category.replace('_', ' ').toUpperCase()}
-                variant={guide.severity === 'critical' ? 'danger' : 'warning'}
-              />
+              <View style={styles.incidentTop}>
+                <Badge label={item.type} variant="brand" />
+                <StatusLabel status={item.status} />
+              </View>
               <Text
                 style={[
-                  styles.guideTitle,
+                  styles.incidentLocation,
                   { color: isDark ? Palette.snow : Palette.pineForest },
                 ]}
               >
-                {selectedLanguage === 'en' ? guide.titleEn : guide.titleHi}
+                {item.location}
               </Text>
-              <Text style={styles.guideDoItem}>
-                • {selectedLanguage === 'en' ? guide.dosEn[0] : guide.dosHi[0]}
-              </Text>
-              <Text style={styles.guideTipText}>
-                Tip: {selectedLanguage === 'en' ? guide.offlineTipEn : guide.offlineTipHi}
+              <Text
+                style={[
+                  styles.incidentDesc,
+                  { color: isDark ? Palette.stone : Palette.slate },
+                ]}
+              >
+                {item.description}
               </Text>
             </View>
           ))}
-        </ScrollView>
 
-        {/* Quick Emergency Hotlines */}
-        <View style={styles.hotlineSection}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: isDark ? Palette.snow : Palette.pineForest },
-            ]}
-          >
-            Direct Emergency Lines (Dial Immediately)
-          </Text>
-
-          <View style={styles.hotlineGrid}>
-            {UTTARAKHAND_EMERGENCY_DIRECTORY.slice(0, 4).map((c) => (
-              <Pressable
-                key={c.contactId}
+          {/* Offline Bilingual Safety Guides */}
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleGroup}>
+              <BookOpen size={18} color={Palette.pineForestMuted} />
+              <Text
                 style={[
-                  styles.hotlineCard,
+                  styles.sectionTitle,
+                  { color: isDark ? Palette.snow : Palette.pineForest },
+                ]}
+              >
+                {selectedLanguage === 'en'
+                  ? 'Offline Mountain Safety Guides'
+                  : 'पर्वतीय आपदा सुरक्षा निर्देशिका'}
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.guidesScroll}
+            {...({ tabIndex: 0, 'aria-label': 'Offline Mountain Safety Guides' } as any)}
+          >
+            {MOUNTAIN_SAFETY_GUIDES.map((guide) => (
+              <View
+                key={guide.id}
+                style={[
+                  styles.guideCard,
                   {
                     backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
                     borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
                   },
                 ]}
-                onPress={() => Linking.openURL(`tel:${c.phoneNumber}`)}
               >
-                <PhoneCall size={16} color={Palette.rescueRed} />
-                <View style={styles.hotlineCardText}>
-                  <Text style={styles.hotlineCardNum}>{c.phoneNumber}</Text>
-                  <Text style={styles.hotlineCardName} numberOfLines={1}>
-                    {c.authorityName}
-                  </Text>
-                </View>
-              </Pressable>
+                <Badge
+                  label={guide.category.replace('_', ' ').toUpperCase()}
+                  variant={guide.severity === 'critical' ? 'danger' : 'warning'}
+                />
+                <Text
+                  style={[
+                    styles.guideTitle,
+                    { color: isDark ? Palette.snow : Palette.pineForest },
+                  ]}
+                >
+                  {selectedLanguage === 'en' ? guide.titleEn : guide.titleHi}
+                </Text>
+                <Text style={styles.guideDoItem}>
+                  • {selectedLanguage === 'en' ? guide.dosEn[0] : guide.dosHi[0]}
+                </Text>
+                <Text style={styles.guideTipText}>
+                  Tip: {selectedLanguage === 'en' ? guide.offlineTipEn : guide.offlineTipHi}
+                </Text>
+              </View>
             ))}
+          </ScrollView>
+
+          {/* Quick Emergency Hotlines */}
+          <View style={styles.hotlineSection}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: isDark ? Palette.snow : Palette.pineForest },
+              ]}
+            >
+              Direct Emergency Lines (Dial Immediately)
+            </Text>
+
+            <View style={styles.hotlineGrid}>
+              {UTTARAKHAND_EMERGENCY_DIRECTORY.slice(0, 4).map((c) => (
+                <Pressable
+                  key={c.contactId}
+                  style={[
+                    styles.hotlineCard,
+                    {
+                      backgroundColor: isDark ? Palette.surfaceDarkElevated : Palette.snow,
+                      borderColor: isDark ? Palette.surfaceDarkBorder : Palette.stone,
+                    },
+                  ]}
+                  onPress={() => Linking.openURL(`tel:${c.phoneNumber}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${c.authorityName} at ${c.phoneNumber}`}
+                  {...({ role: 'button' } as any)}
+                >
+                  <PhoneCall size={16} color={Palette.rescueRed} />
+                  <View style={styles.hotlineCardText}>
+                    <Text style={styles.hotlineCardNum}>{c.phoneNumber}</Text>
+                    <Text style={styles.hotlineCardName} numberOfLines={1}>
+                      {c.authorityName}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* Persistent 5-Tab Navigation Bar */}
       <BottomNavigation />
@@ -479,6 +518,9 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.caption,
     color: Palette.pineForest,
   },
+  mainContainer: {
+    flex: 1,
+  },
   scroll: {
     flex: 1,
   },
@@ -509,7 +551,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#93000A',
+    backgroundColor: '#7D0008',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
@@ -523,9 +565,9 @@ const styles = StyleSheet.create({
     color: Palette.snow,
   },
   sosBannerSub: {
-    fontFamily: Typography.fontFamily.regular,
+    fontFamily: Typography.fontFamily.medium,
     fontSize: Typography.fontSize.caption,
-    color: Palette.rescueRedLight,
+    color: '#FFFFFF', // 100% white on dark red (contrast >7.5:1)
     marginTop: 2,
   },
   actionGrid: {
@@ -624,7 +666,7 @@ const styles = StyleSheet.create({
   },
   guideTipText: {
     fontFamily: Typography.fontFamily.semibold,
-    fontSize: 10,
+    fontSize: Typography.fontSize.caption,
     color: Palette.pineForestMuted,
     marginTop: 4,
   },
@@ -655,8 +697,8 @@ const styles = StyleSheet.create({
     color: Palette.rescueRed,
   },
   hotlineCardName: {
-    fontFamily: Typography.fontFamily.regular,
-    fontSize: 10,
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.caption,
     color: Palette.slateMuted,
   },
 });
