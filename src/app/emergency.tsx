@@ -1,166 +1,624 @@
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
+  Clipboard,
   Linking,
+  Modal,
   Pressable,
   StatusBar,
   StyleSheet,
   Text,
   View,
-} from "react-native";
+} from 'react-native';
 import * as Location from 'expo-location';
-import * as SMS from 'expo-sms';
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import {
+  AlertTriangle,
+  PhoneCall,
+  Copy,
+  ChevronLeft,
+  ShieldAlert,
+  MapPin,
+  CheckCircle,
+} from 'lucide-react-native';
 
-import { useTheme } from "@/hooks/useTheme";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from '@/hooks/useTheme';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { SmoothScrollView as ScrollView } from '@/components/SmoothScrollView';
-import { getEmergencyContact } from "@/data/userStore";
-
-interface QuickContact {
-  label: string;
-  number: string;
-  desc: string;
-  color: string;
-}
-
-const EMERGENCY_CONTACTS: QuickContact[] = [
-  { label: "National Emergency", number: "112", desc: "Police / Fire / Medical", color: "#EA580C" },
-  { label: "Ambulance / Medical", number: "108", desc: "Emergency medical transport", color: "#D97706" },
-  { label: "Disaster Mgmt (NDRF)", number: "1078", desc: "Landslides & rescue", color: "#15803D" },
-  { label: "Highway Patrol", number: "1033", desc: "Highway assistance", color: "#15803D" },
-];
+import { Palette, Radii, Spacing, Typography } from '@/theme/tokens';
+import {
+  UTTARAKHAND_EMERGENCY_DIRECTORY,
+} from '@/lib/sms/directory';
+import { buildEmergencySmsMessage } from '@/lib/sms/format';
+import { smsCoordinator, RecipientDispatchState } from '@/lib/sms/coordinator';
+import { incidentRepository } from '@/lib/sqlite/incidentRepository';
+import { AppButton } from '@/components/ui/AppButton';
+import { Badge } from '@/components/ui/Badge';
 
 export default function EmergencyScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const emergencyContact = getEmergencyContact();
 
-  function dialNumber(num: string) {
-    Alert.alert(
-      `Call ${num}`,
-      `Open phone dialler to connect with ${num}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Call Now", onPress: () => Linking.openURL(`tel:${num}`) },
-      ]
-    );
+  // Location telemetry state
+  const [coords, setCoords] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+  } | null>(null);
+  const [altitude, setAltitude] = useState<number | null>(null);
+  const [locationStatus, setLocationStatus] = useState<
+    'locating' | 'locked' | 'unavailable'
+  >('locating');
+
+  // SOS hold state
+  const [isHolding, setIsHolding] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const holdIntervalRef = useRef<any>(null);
+
+  // Active incident state
+  const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
+  const [selectedIncidentType, setSelectedIncidentType] =
+    useState<string>('Landslide');
+
+  // SMS Confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [currentRecipient, setCurrentRecipient] =
+    useState<RecipientDispatchState | null>(null);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(
+    null
+  );
+
+  // Acquire real GPS fix on mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          if (isMounted) setLocationStatus('unavailable');
+          return;
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+
+        if (isMounted) {
+          setCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
+          if (position.coords.altitude !== null) {
+            setAltitude(Math.round(position.coords.altitude));
+          }
+          setLocationStatus('locked');
+        }
+      } catch {
+        if (isMounted) setLocationStatus('unavailable');
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (holdIntervalRef.current) clearInterval(holdIntervalRef.current);
+    };
+  }, []);
+
+  function startHold() {
+    setIsHolding(true);
+    setHoldProgress(0);
+    const startTime = Date.now();
+    const duration = 2000; // 2 seconds hold to trigger
+
+    holdIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      setHoldProgress(progress);
+
+      if (progress >= 1) {
+        clearInterval(holdIntervalRef.current);
+        setIsHolding(false);
+        triggerSosDispatch();
+      }
+    }, 50);
   }
 
-  async function shareLocation() {
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Location permission needed', 'Allow location access to include your current coordinates.');
-        return;
-      }
+  function cancelHold() {
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+    }
+    setIsHolding(false);
+    setHoldProgress(0);
+  }
 
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = position.coords;
-      const mapLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-      const message = `I need help. My current location is: ${mapLink}\nCoordinates: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}\nSent from PahaadSaathi.`;
-      const recipient = emergencyContact || '+918755903705';
-      const recipientDigits = recipient.replace('+', '');
+  async function triggerSosDispatch() {
+    const incId = `PS-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    setActiveIncidentId(incId);
 
-      Alert.alert('Share your location', `Send your current location to ${recipient}?`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'SMS',
-          onPress: () => {
-            void SMS.isAvailableAsync().then(async (available) => {
-              if (!available) {
-                Alert.alert('SMS unavailable', 'This device cannot open SMS right now.');
-                return;
-              }
-              await SMS.sendSMSAsync([recipient], message);
-            }).catch(() => Alert.alert('SMS unavailable', 'Unable to open the messaging app.'));
-          },
-        },
-        {
-          text: 'WhatsApp',
-          onPress: () => {
-            void Linking.openURL(`https://wa.me/${recipientDigits}?text=${encodeURIComponent(message)}`)
-              .catch(() => Alert.alert('WhatsApp unavailable', 'Unable to open WhatsApp on this device.'));
-          },
-        },
-      ]);
-    } catch {
-      Alert.alert('Could not get location', 'Check that Location Services are enabled, then try again.');
+    // 1. Immediately save incident locally to SQLite durable storage
+    await incidentRepository.saveIncidentLocally({
+      id: incId,
+      type: selectedIncidentType,
+      severity: 'High',
+      latitude: coords ? coords.latitude : null,
+      longitude: coords ? coords.longitude : null,
+      accuracyMeters: coords ? coords.accuracy : null,
+      locationTimestamp: new Date().toISOString(),
+      description: `Emergency SOS initiated for ${selectedIncidentType}`,
+      status: 'reported',
+      verificationStatus: 'unverified',
+    });
+
+    // 2. Format GSM-7 canonical emergency SMS
+    const { body } = buildEmergencySmsMessage({
+      incidentId: incId,
+      type: selectedIncidentType,
+      severity: 'CRITICAL',
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
+      accuracyMeters: coords?.accuracy,
+    });
+
+    // 3. Initiate single-recipient SMS session with SDRF and National 112
+    const recipients = [
+      { id: '112', name: 'National Emergency 112', phone: '112' },
+      { id: 'sdrf', name: 'Uttarakhand SDRF Rescue', phone: '+919411112973' },
+    ];
+
+    await smsCoordinator.startSession(incId, body, recipients);
+
+    // 4. Dispatch first recipient composer
+    dispatchNextRecipientComposer();
+  }
+
+  async function dispatchNextRecipientComposer() {
+    const session = await smsCoordinator.getActiveSession();
+    if (!session || session.isComplete) {
+      return;
+    }
+
+    const res = await smsCoordinator.openCurrentRecipientComposer();
+    if (res.success && res.recipient) {
+      setCurrentRecipient(res.recipient);
+      setShowConfirmModal(true);
+    } else {
+      Alert.alert(
+        'SMS Fallback Note',
+        res.error || 'Cellular SMS composer could not be launched. Use Call 112 instead.'
+      );
     }
   }
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle={theme.name === 'dark' ? 'light-content' : 'dark-content'} />
+  async function handleConfirmOutcome(outcome: 'yes' | 'no' | 'unsure') {
+    if (!currentRecipient) return;
 
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Pressable style={[styles.backBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => router.back()}>
-          <Text style={[styles.backBtnText, { color: theme.textPrimary }]}>←</Text>
+    await smsCoordinator.recordUserConfirmation(
+      currentRecipient.recipientId,
+      outcome
+    );
+    setShowConfirmModal(false);
+
+    if (outcome === 'yes') {
+      setConfirmationNotice(
+        'You confirmed pressing Send in the SMS app. Delivery to recipient is unverified until acknowledged by emergency servers.'
+      );
+    } else {
+      setConfirmationNotice('SMS dispatch was not sent or cancelled.');
+    }
+
+    // Check if more recipients are queued
+    const session = await smsCoordinator.getActiveSession();
+    if (session && !session.isComplete) {
+      Alert.alert(
+        'Next Emergency Recipient',
+        `Send emergency alert to next authority: ${session.recipients[session.currentRecipientIndex]?.recipientName}?`,
+        [
+          { text: 'Skip', style: 'cancel' },
+          { text: 'Send', onPress: () => dispatchNextRecipientComposer() },
+        ]
+      );
+    }
+  }
+
+  function dialNumber(num: string, name: string) {
+    Alert.alert(`Call ${name}`, `Open phone dialer to call ${num}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Call Now', onPress: () => Linking.openURL(`tel:${num}`) },
+    ]);
+  }
+
+  function copySosDetails() {
+    const incId = activeIncidentId || 'PS-EMRG';
+    const { body } = buildEmergencySmsMessage({
+      incidentId: incId,
+      type: selectedIncidentType,
+      severity: 'CRITICAL',
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
+      accuracyMeters: coords?.accuracy,
+    });
+
+    Clipboard.setString(body);
+    Alert.alert('Copied to Clipboard', 'Emergency coordinates & details copied.');
+  }
+
+  return (
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor:
+            theme.name === 'dark' ? Palette.surfaceDark : Palette.glacier,
+        },
+      ]}
+    >
+      <StatusBar
+        barStyle={theme.name === 'dark' ? 'light-content' : 'dark-content'}
+      />
+
+      {/* Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            borderBottomColor:
+              theme.name === 'dark' ? Palette.surfaceDarkBorder : Palette.stone,
+          },
+        ]}
+      >
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+        >
+          <ChevronLeft
+            size={24}
+            color={
+              theme.name === 'dark' ? Palette.snow : Palette.pineForest
+            }
+          />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Emergency Assistance</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text
+            style={[
+              styles.headerProtocol,
+              {
+                color:
+                  theme.name === 'dark'
+                    ? Palette.pineForestContainer
+                    : Palette.pineForestMuted,
+              },
+            ]}
+          >
+            ALPINE INCIDENT PROTOCOL
+          </Text>
+          <Text
+            style={[
+              styles.headerTitle,
+              {
+                color:
+                  theme.name === 'dark' ? Palette.snow : Palette.pineForest,
+              },
+            ]}
+          >
+            Emergency Assistance
+          </Text>
+        </View>
         <ThemeToggle />
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
-          <View style={[styles.alertBanner, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-            <View style={[styles.alertIndicator, { backgroundColor: theme.primary }]}>
-              <View style={styles.alertDot} />
-              <Text style={[styles.alertLabel, { color: theme.textPrimary }]}>DIRECT EMERGENCY RESPONSE</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Telemetry & Coordinates Banner */}
+        <View style={styles.telemetryBanner}>
+          <View style={styles.telemetryHeaderRow}>
+            <View style={styles.telemetryStatusGroup}>
+              <View
+                style={[
+                  styles.statusPulseDot,
+                  {
+                    backgroundColor:
+                      locationStatus === 'locked'
+                        ? Palette.verifiedGreen
+                        : Palette.saffron,
+                  },
+                ]}
+              />
+              <Text style={styles.telemetryStatusText}>
+                {locationStatus === 'locked'
+                  ? 'GPS FIX LOCKED (ACCURATE)'
+                  : locationStatus === 'locating'
+                  ? 'ACQUIRING SATELLITE FIX...'
+                  : 'GPS UNAVAILABLE'}
+              </Text>
             </View>
-            <Text style={[styles.alertTitle, { color: theme.textPrimary }]}>Immediate threat to life?</Text>
-            <Text style={[styles.alertSubhead, { color: theme.textSecondary }]}>
-              Dial 112 immediately. PahaadSaathi is advisory only, not emergency dispatch.
-            </Text>
+            <Badge
+              label="OFFLINE PERSISTENCE"
+              variant="brand"
+              style={{ backgroundColor: Palette.pineForestContainer }}
+            />
           </View>
-          <Pressable style={[styles.mainDialBtn, { backgroundColor: theme.primary }]} onPress={() => dialNumber("112")}>
-            <Text style={[styles.mainDialText, { color: '#FFFFFF' }]}>Call 112 (Emergency)</Text>
+
+          <View style={styles.coordinatesRow}>
+            <MapPin size={22} color={Palette.pineForestContainer} />
+            <View style={styles.coordinatesTextGroup}>
+              <Text style={styles.coordLabel}>EXACT TELEMETRY COORDINATES</Text>
+              <Text style={styles.coordValue}>
+                {coords
+                  ? `${coords.latitude.toFixed(5)}°N, ${coords.longitude.toFixed(5)}°E`
+                  : 'LOCATION UNKNOWN'}
+              </Text>
+              {coords?.accuracy && (
+                <Text style={styles.coordAccuracy}>
+                  Accuracy: ±{Math.round(coords.accuracy)}m
+                  {altitude ? ` • Elevation: ~${altitude}m` : ''}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* SOS Hold Trigger Cluster */}
+        <View
+          style={[
+            styles.sosCard,
+            {
+              backgroundColor:
+                theme.name === 'dark'
+                  ? Palette.surfaceDarkElevated
+                  : Palette.snow,
+              borderColor:
+                theme.name === 'dark'
+                  ? Palette.surfaceDarkBorder
+                  : Palette.stone,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sosInstruction,
+              {
+                color:
+                  theme.name === 'dark' ? Palette.stone : Palette.slate,
+              },
+            ]}
+          >
+            Press and hold for 2 seconds to initiate local disaster SOS dispatch
+          </Text>
+
+          {/* Incident Type Selector */}
+          <View style={styles.typeSelectorRow}>
+            {['Landslide', 'Flash Flood', 'Medical', 'Trapped'].map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => setSelectedIncidentType(type)}
+                style={[
+                  styles.typeChip,
+                  selectedIncidentType === type && styles.typeChipSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeChipText,
+                    selectedIncidentType === type && styles.typeChipTextSelected,
+                  ]}
+                >
+                  {type}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.sosButtonContainer}>
+            <Pressable
+              onPressIn={startHold}
+              onPressOut={cancelHold}
+              style={[
+                styles.sosButton,
+                isHolding && styles.sosButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Hold 2 seconds for SOS emergency dispatch"
+            >
+              <ShieldAlert size={42} color={Palette.snow} />
+              <Text style={styles.sosButtonLabel}>
+                {isHolding ? `${Math.round(holdProgress * 100)}%` : 'HOLD SOS'}
+              </Text>
+              <Text style={styles.sosSubLabel}>2 SECONDS</Text>
+            </Pressable>
+          </View>
+
+          {activeIncidentId && (
+            <View style={styles.activeIncidentBadge}>
+              <CheckCircle size={16} color={Palette.verifiedGreen} />
+              <Text style={styles.activeIncidentText}>
+                Incident {activeIncidentId} saved safely in offline database
+              </Text>
+            </View>
+          )}
+
+          {confirmationNotice && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>{confirmationNotice}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Primary Direct Call 112 Action */}
+        <View style={styles.directCallSection}>
+          <Pressable
+            style={styles.call112Button}
+            onPress={() =>
+              dialNumber('112', 'National Emergency Control (112)')
+            }
+          >
+            <PhoneCall size={24} color={Palette.snow} />
+            <View style={styles.call112TextGroup}>
+              <Text style={styles.call112MainText}>Call 112 (National Emergency)</Text>
+              <Text style={styles.call112SubText}>
+                Direct cellular line • Police, Fire & Medical
+              </Text>
+            </View>
           </Pressable>
         </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Direct Helplines</Text>
-          {EMERGENCY_CONTACTS.map((item) => (
-            <Pressable key={item.number} style={[styles.contactRow, { backgroundColor: theme.cardBackground, borderColor: theme.border }]} onPress={() => dialNumber(item.number)}>
+        {/* Copy & Share Utilities */}
+        <View style={styles.utilityRow}>
+          <AppButton
+            label="Copy SOS Details"
+            icon={<Copy size={16} color={Palette.pineForest} />}
+            variant="outline"
+            size="md"
+            style={styles.utilityBtn}
+            onPress={copySosDetails}
+          />
+        </View>
+
+        {/* Regional Emergency Directory */}
+        <View style={styles.directorySection}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color:
+                  theme.name === 'dark' ? Palette.snow : Palette.pineForest,
+              },
+            ]}
+          >
+            Uttarakhand Emergency Authorities
+          </Text>
+
+          {UTTARAKHAND_EMERGENCY_DIRECTORY.map((contact) => (
+            <View
+              key={contact.contactId}
+              style={[
+                styles.contactCard,
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? Palette.surfaceDarkElevated
+                      : Palette.snow,
+                  borderColor:
+                    theme.name === 'dark'
+                      ? Palette.surfaceDarkBorder
+                      : Palette.stone,
+                },
+              ]}
+            >
               <View style={styles.contactInfo}>
-                <View style={[styles.contactTitleRow, { alignItems: 'center', gap: 8, marginBottom: 4 }]}>
-                  <Text style={[styles.contactLabel, { color: theme.textPrimary }]}>{item.label}</Text>
-                  <Text style={[styles.contactBadge, { color: item.color, backgroundColor: item.color === '#EA580C' ? '#FEF2F2' : item.color === '#D97706' ? '#FEF4DB' : '#ECFDF5' }]}>{item.number}</Text>
-                </View>
-                <Text style={[styles.contactDesc, { color: theme.textSecondary }]}>{item.desc}</Text>
+                <Text
+                  style={[
+                    styles.contactName,
+                    {
+                      color:
+                        theme.name === 'dark'
+                          ? Palette.snow
+                          : Palette.pineForest,
+                    },
+                  ]}
+                >
+                  {contact.authorityName}
+                </Text>
+                <Text
+                  style={[
+                    styles.contactDesc,
+                    {
+                      color:
+                        theme.name === 'dark'
+                          ? Palette.slateMuted
+                          : Palette.slate,
+                    },
+                  ]}
+                >
+                  {contact.description}
+                </Text>
+                <Text style={styles.contactNumber}>{contact.phoneNumber}</Text>
               </View>
-              <Text style={[styles.callIconText, { color: theme.textSecondary }]}>Call →</Text>
-            </Pressable>
+
+              <Pressable
+                style={styles.contactDialButton}
+                onPress={() =>
+                  dialNumber(contact.phoneNumber, contact.authorityName)
+                }
+                accessibilityLabel={`Call ${contact.authorityName}`}
+              >
+                <PhoneCall size={18} color={Palette.snow} />
+              </Pressable>
+            </View>
           ))}
         </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Coordinate Broadcast</Text>
-          <Pressable style={[styles.shareCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]} onPress={shareLocation}>
-            <View style={[styles.shareRowBody, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }]}>
-              <Text style={[styles.shareTitle, { color: theme.textPrimary }]}>Send my location</Text>
-              <Text style={[styles.shareArrow, { color: theme.primary }]}>→</Text>
-            </View>
-            <Text style={[styles.shareDesc, { color: theme.textSecondary }]}>SMS or WhatsApp · {emergencyContact || '+918755903705'}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Mountain Safety Protocol</Text>
-          <View style={styles.checkItem}>
-            <Text style={[styles.checkNum, { color: theme.primary }]}>1</Text>
-            <Text style={[styles.checkText, { color: theme.textSecondary }]}>In landslide zones, move to solid rock outcroppings. Avoid ravines and riverbeds.</Text>
-          </View>
-          <View style={styles.checkItem}>
-            <Text style={[styles.checkNum, { color: theme.primary }]}>2</Text>
-            <Text style={[styles.checkText, { color: theme.textSecondary }]}>Keep hazard lights on in poor visibility.</Text>
-          </View>
-          <View style={styles.checkItem}>
-            <Text style={[styles.checkNum, { color: theme.primary }]}>3</Text>
-            <Text style={[styles.checkText, { color: theme.textSecondary }]}>Conserve battery: use Low Power Mode.</Text>
-          </View>
-        </View>
       </ScrollView>
+
+      {/* Honest Post-SMS Confirmation Dialog */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalDialog,
+              {
+                backgroundColor:
+                  theme.name === 'dark'
+                    ? Palette.surfaceDarkElevated
+                    : Palette.snow,
+              },
+            ]}
+          >
+            <AlertTriangle size={32} color={Palette.saffron} />
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  color:
+                    theme.name === 'dark' ? Palette.snow : Palette.slate,
+                },
+              ]}
+            >
+              Confirm SMS Dispatch Outcome
+            </Text>
+            <Text
+              style={[
+                styles.modalBody,
+                {
+                  color:
+                    theme.name === 'dark' ? Palette.stone : Palette.slateMuted,
+                },
+              ]}
+            >
+              Did you press the Send button in your native messaging app for{' '}
+              {currentRecipient?.recipientName}?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.modalBtnSuccess]}
+                onPress={() => handleConfirmOutcome('yes')}
+              >
+                <Text style={styles.modalBtnTextWhite}>Yes, I Pressed Send</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.modalBtnDanger]}
+                onPress={() => handleConfirmOutcome('no')}
+              >
+                <Text style={styles.modalBtnTextWhite}>No, Did Not Send</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.modalBtnNeutral]}
+                onPress={() => handleConfirmOutcome('unsure')}
+              >
+                <Text style={styles.modalBtnTextDark}>I am Unsure</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -168,213 +626,313 @@ export default function EmergencyScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFDF5',
-  },
-  sloganRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FDBA74',
-  },
-  sloganText: {
-    color: '#EA580C',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#FED7AA',
-    backgroundColor: '#FFFDF5',
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    alignItems: 'center',
-    justifyContent: 'center',
+  backButton: {
+    padding: Spacing.xs,
+    marginRight: Spacing.sm,
   },
-  backBtnText: {
-    color: '#3B2F2F',
-    fontSize: 20,
-    fontWeight: '800',
+  headerTitleContainer: {
+    flex: 1,
+  },
+  headerProtocol: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.caption,
+    letterSpacing: Typography.letterSpacing.wider,
   },
   headerTitle: {
-    color: '#3B2F2F',
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.headingSm,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 90,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingVertical: Spacing.md,
   },
-  section: {
-    marginBottom: 20,
+  telemetryBanner: {
+    backgroundColor: Palette.pineForest,
+    borderRadius: Radii.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  alertBanner: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 20,
-  },
-  alertIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  alertDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#EA580C',
-  },
-  alertLabel: {
-    color: '#EA580C',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  alertTitle: {
-    color: '#3B2F2F',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    marginBottom: 6,
-  },
-  alertSubhead: {
-    color: '#4B5563',
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 16,
-  },
-  mainDialBtn: {
-    backgroundColor: '#EA580C',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  mainDialText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  sectionLabel: {
-    color: '#8A735B',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-  },
-  contactRow: {
+  telemetryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 8,
+    marginBottom: Spacing.sm,
+  },
+  telemetryStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: Spacing.xs,
+  },
+  telemetryStatusText: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.pineForestContainer,
+    letterSpacing: Typography.letterSpacing.wide,
+  },
+  coordinatesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: Spacing.xs,
+  },
+  coordinatesTextGroup: {
+    marginLeft: Spacing.sm,
+    flex: 1,
+  },
+  coordLabel: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.pineForestContainer,
+    letterSpacing: Typography.letterSpacing.wide,
+  },
+  coordValue: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.subheading,
+    color: Palette.snow,
+    marginVertical: 2,
+  },
+  coordAccuracy: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.glacierDark,
+  },
+  sosCard: {
+    borderRadius: Radii.lg,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#FED7AA',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  sosInstruction: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: Typography.fontSize.bodySm,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+  },
+  typeChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: Radii.full,
+    backgroundColor: Palette.stoneLight,
+  },
+  typeChipSelected: {
+    backgroundColor: Palette.pineForest,
+  },
+  typeChipText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.slate,
+  },
+  typeChipTextSelected: {
+    color: Palette.snow,
+  },
+  sosButtonContainer: {
+    marginVertical: Spacing.md,
+  },
+  sosButton: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: Palette.rescueRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Palette.rescueRed,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  sosButtonPressed: {
+    transform: [{ scale: 0.95 }],
+    backgroundColor: '#93000A',
+  },
+  sosButtonLabel: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.bodyLg,
+    color: Palette.snow,
+    marginTop: 4,
+  },
+  sosSubLabel: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.rescueRedLight,
+  },
+  activeIncidentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.md,
+    backgroundColor: Palette.verifiedGreenLight,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radii.sm,
+  },
+  activeIncidentText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.verifiedGreen,
+    marginLeft: Spacing.xs,
+  },
+  noticeBox: {
+    marginTop: Spacing.sm,
+    padding: Spacing.sm,
+    backgroundColor: Palette.saffronLight,
+    borderRadius: Radii.sm,
+  },
+  noticeText: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.saffronMuted,
+    textAlign: 'center',
+  },
+  directCallSection: {
+    marginBottom: Spacing.md,
+  },
+  call112Button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Palette.rescueRed,
+    borderRadius: Radii.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  call112TextGroup: {
+    marginLeft: Spacing.md,
+  },
+  call112MainText: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.bodyLg,
+    color: Palette.snow,
+  },
+  call112SubText: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.rescueRedLight,
+  },
+  utilityRow: {
+    flexDirection: 'row',
+    marginBottom: Spacing.lg,
+  },
+  utilityBtn: {
+    flex: 1,
+  },
+  directorySection: {
+    marginBottom: Spacing.xxl,
+  },
+  sectionTitle: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.subheading,
+    marginBottom: Spacing.md,
+  },
+  contactCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: Radii.md,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
   },
   contactInfo: {
     flex: 1,
-    paddingRight: 10,
+    marginRight: Spacing.sm,
   },
-  contactTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  contactLabel: {
-    color: '#3B2F2F',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  contactBadge: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+  contactName: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.bodyMd,
   },
   contactDesc: {
-    color: '#8A735B',
-    fontSize: 12,
-    lineHeight: 16,
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.caption,
+    marginTop: 2,
   },
-  callIconText: {
-    color: '#8A735B',
-    fontSize: 12,
-    fontWeight: '700',
+  contactNumber: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.pineForestMuted,
+    marginTop: 4,
   },
-  shareCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  shareRowBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  contactDialButton: {
+    backgroundColor: Palette.pineForest,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'center',
   },
-  shareTitle: {
-    color: '#3B2F2F',
-    fontSize: 14,
-    fontWeight: '700',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.lg,
   },
-  shareArrow: {
-    color: '#EA580C',
-    fontSize: 14,
-    fontWeight: '800',
+  modalDialog: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: Radii.lg,
+    padding: Spacing.lg,
+    alignItems: 'center',
   },
-  shareDesc: {
-    color: '#8A735B',
-    fontSize: 12,
-    lineHeight: 17,
+  modalTitle: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.subheading,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
   },
-  checkItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 10,
+  modalBody: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.bodySm,
+    textAlign: 'center',
+    marginVertical: Spacing.md,
   },
-  checkNum: {
-    color: '#EA580C',
-    fontSize: 11,
-    fontWeight: '800',
-    width: 16,
-    marginTop: 1,
+  modalButtons: {
+    width: '100%',
+    gap: Spacing.sm,
   },
-  checkText: {
-    color: '#3B2F2F',
-    fontSize: 12,
-    lineHeight: 18,
+  modalButton: {
+    paddingVertical: 12,
+    borderRadius: Radii.md,
+    alignItems: 'center',
+  },
+  modalBtnSuccess: {
+    backgroundColor: Palette.verifiedGreen,
+  },
+  modalBtnDanger: {
+    backgroundColor: Palette.rescueRed,
+  },
+  modalBtnNeutral: {
+    backgroundColor: Palette.stone,
+  },
+  modalBtnTextWhite: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: Typography.fontSize.bodyMd,
+    color: Palette.snow,
+  },
+  modalBtnTextDark: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.bodyMd,
+    color: Palette.slate,
   },
 });

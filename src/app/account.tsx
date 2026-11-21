@@ -31,6 +31,7 @@ import {
 import { useAppTheme } from "@/context/ThemeContext";
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { SmoothScrollView as ScrollView } from '@/components/SmoothScrollView';
+import { BottomNavigation } from '@/components/BottomNavigation';
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -43,12 +44,7 @@ export default function AccountScreen() {
   const [editingArea, setEditingArea] = useState(user?.area || "");
   const [saving, setSaving] = useState(false);
 
-  // Auth guard - redirect if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-    }
-  }, [router]);
+  // Guest mode allowed: offline emergency settings available without mandatory sign-in
 
   useEffect(() => {
     const unsub = subscribeUser((u) => {
@@ -291,11 +287,18 @@ export default function AccountScreen() {
 
         {/* Actions */}
         <View style={styles.actionGroup}>
-          <Pressable style={[styles.logoutBtn, { backgroundColor: colors.bgTertiary, borderColor: colors.borderSubtle }]} onPress={handleLogout}>
-            <Text style={[styles.logoutBtnText, { color: colors.accentRed }]}>Sign Out</Text>
-          </Pressable>
+          {isAuthenticated() ? (
+            <Pressable style={[styles.logoutBtn, { backgroundColor: colors.bgTertiary, borderColor: colors.borderSubtle }]} onPress={handleLogout}>
+              <Text style={[styles.logoutBtnText, { color: colors.accentRed }]}>Sign Out</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={[styles.saveBtn, { backgroundColor: colors.accentGreen }]} onPress={() => router.push("/login")}>
+              <Text style={[styles.saveBtnText, { color: colors.bgPrimary }]}>Sign In / Register</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
+      <BottomNavigation />
     </SafeAreaView>
   );
 }

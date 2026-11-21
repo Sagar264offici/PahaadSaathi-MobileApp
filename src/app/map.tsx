@@ -29,6 +29,7 @@ import { searchPlaces } from '@/lib/location/location-search';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { SmoothScrollView as ScrollView } from '@/components/SmoothScrollView';
+import { BottomNavigation } from '@/components/BottomNavigation';
 
 export default function MapScreen() {
   const router = useRouter();
@@ -451,6 +452,7 @@ export default function MapScreen() {
           </View>
         )}
       </ScrollView>
+      <BottomNavigation />
       </View>
     </SafeAreaView>
   );

@@ -131,11 +131,25 @@ export type RelayStats = {
   totalHopCount: number;
 };
 
-export const DEFAULT_MAX_HOPS = 12;
+export const DEFAULT_MAX_HOPS = 5; // Strictly capped at 5 hops as per emergency relay specification
 export const DEFAULT_MAX_RETRIES = 3;
 export const DEFAULT_RETRY_DELAY_MS = 5000;
 export const DEFAULT_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const MAX_PAYLOAD_SIZE = 65536; // 64KB
+
+/**
+ * Computes a lightweight fast hash for payload integrity verification
+ */
+export function computePayloadHash(payload: unknown): string {
+  const str = JSON.stringify(payload);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0');
+}
 
 export function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;

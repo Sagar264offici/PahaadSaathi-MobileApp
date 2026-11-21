@@ -15,6 +15,7 @@ import {
   QueuedReport,
 } from "@/lib/db";
 import { isModerator } from "@/data/userStore";
+import { incidentRepository } from "@/lib/sqlite/incidentRepository";
 
 export type HazardType =
   | "Landslide"
@@ -296,6 +297,18 @@ export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'c
       reported_by_role: newReport.reportedByRole,
     });
   }
+
+  // Ensure durable offline persistence in SQLite repository
+  await incidentRepository.saveIncidentLocally({
+    id: newReport.id,
+    type: newReport.type,
+    severity: newReport.severity,
+    latitude: newReport.latitude,
+    longitude: newReport.longitude,
+    description: newReport.description,
+    status: newReport.status as any,
+    verificationStatus: 'unverified',
+  }).catch(() => {});
 
   hazards = [newReport, ...hazards];
   notify();

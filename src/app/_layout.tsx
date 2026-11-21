@@ -29,6 +29,8 @@ function RootNavigation() {
         {/* Auth-required routes */}
         <Stack.Screen name="report" />
         <Stack.Screen name="emergency" />
+        <Stack.Screen name="community" />
+        <Stack.Screen name="control-room/index" />
         <Stack.Screen name="map" />
         <Stack.Screen name="relay" />
         <Stack.Screen name="hazard/[id]" />
