@@ -53,13 +53,48 @@ export default function HazardDetails() {
   const [hazard, setHazard] = useState<Hazard | undefined>(undefined);
 
   useEffect(() => {
-    const load = () => {
-      const item = id ? getHazard(id) : undefined;
-      setHazard(item);
+    let mounted = true;
+    const load = async () => {
+      let item = id ? getHazard(id) : undefined;
+      if (!item && id) {
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          const { data } = await supabase.from('hazards').select('*').eq('id', id).maybeSingle();
+          if (data && mounted) {
+            item = {
+              id: String(data.id),
+              type: data.type,
+              location: data.location || data.area || data.description || 'Reported Mountain Location',
+              area: data.area || 'Uttarakhand Highway',
+              description: data.description || '',
+              severity: (data.severity ? (data.severity.charAt(0).toUpperCase() + data.severity.slice(1).toLowerCase()) : 'Medium') as any,
+              status: (data.status || 'reported') as any,
+              time: data.created_at ? new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+              sample: false,
+              latitude: data.latitude ?? data.lat ?? null,
+              longitude: data.longitude ?? data.lng ?? null,
+              photo_url: data.photo_url ?? null,
+              reportedBy: data.reported_by || 'Mountain Citizen',
+              reportedByRole: data.reported_by_role || 'resident',
+              corroborationCount: data.corroboration_count ?? 1,
+              created_at: data.created_at || new Date().toISOString(),
+              updated_at: data.updated_at,
+            };
+          }
+        } catch {}
+      }
+      if (mounted) {
+        setHazard(item);
+      }
     };
     load();
-    const unsub = subscribe(load);
-    return () => unsub();
+    const unsub = subscribe(() => {
+      load();
+    });
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, [id]);
 
   async function resolveReport() {

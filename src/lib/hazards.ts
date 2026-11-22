@@ -47,9 +47,10 @@ export async function createHazard(report: {
   photo_url?: string | null;
   reported_by?: string | null;
   reported_by_role?: string | null;
+  reporter_phone?: string | null;
   status?: ReportStatus;
 }) {
-  // First attempt: standard schema with latitude / longitude / reported_by
+  // First attempt: standard schema with latitude / longitude / reported_by / reporter_phone
   const standardPayload: Record<string, any> = {
     type: report.type,
     description: report.description.trim(),
@@ -60,6 +61,7 @@ export async function createHazard(report: {
     photo_url: report.photo_url ?? null,
     reported_by: report.reported_by ?? null,
     reported_by_role: report.reported_by_role ?? null,
+    reporter_phone: report.reporter_phone ?? null,
     status: report.status ?? 'reported',
   };
 

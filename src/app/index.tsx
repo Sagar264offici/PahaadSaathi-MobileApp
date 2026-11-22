@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Image } from 'expo-image';
 import {
   Alert,
   Animated,
@@ -319,6 +320,18 @@ export default function HomeScreen() {
             </Text>
             <View style={styles.notifActionRow}>
               <Pressable
+                style={[styles.notifActionBtn, { backgroundColor: Palette.pineForestContainer }]}
+                onPress={() => {
+                  const targetId = activeNotification.hazard.id;
+                  dismissNotification();
+                  router.push(`/hazard/${targetId}` as any);
+                }}
+              >
+                <Text style={[styles.notifActionBtnText, { color: Palette.pineForest, fontWeight: '700' }]}>
+                  View Report & Photo
+                </Text>
+              </Pressable>
+              <Pressable
                 style={styles.notifActionBtn}
                 onPress={() => {
                   dismissNotification();
@@ -326,7 +339,7 @@ export default function HomeScreen() {
                 }}
               >
                 <Navigation size={13} color={Palette.snow} />
-                <Text style={styles.notifActionBtnText}>View on Live Map</Text>
+                <Text style={styles.notifActionBtnText}>View on Map</Text>
               </Pressable>
             </View>
           </View>
@@ -840,23 +853,49 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Location Title & Description */}
-                <Text
-                  style={[
-                    styles.cardLocationTitle,
-                    { color: isDark ? Palette.snow : Palette.pineForest },
-                  ]}
+                <Pressable
+                  onPress={() => router.push(`/hazard/${item.id}` as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View full report of ${item.type} at ${item.location}`}
                 >
-                  {item.location}
-                </Text>
+                  <Text
+                    style={[
+                      styles.cardLocationTitle,
+                      { color: isDark ? Palette.snow : Palette.pineForest },
+                    ]}
+                  >
+                    {item.location}
+                  </Text>
 
-                <Text
-                  style={[
-                    styles.cardDescription,
-                    { color: isDark ? Palette.stone : Palette.slate },
-                  ]}
-                >
-                  {item.description}
-                </Text>
+                  <Text
+                    style={[
+                      styles.cardDescription,
+                      { color: isDark ? Palette.stone : Palette.slate },
+                    ]}
+                  >
+                    {item.description}
+                  </Text>
+                </Pressable>
+
+                {/* Attached Incident Photo */}
+                {item.photo_url ? (
+                  <Pressable
+                    style={styles.cardPhotoWrapper}
+                    onPress={() => router.push(`/hazard/${item.id}` as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel="View full photo and incident details"
+                  >
+                    <Image
+                      source={{ uri: item.photo_url }}
+                      style={styles.cardPhoto}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <View style={styles.cardPhotoOverlayBadge}>
+                      <Text style={styles.cardPhotoOverlayText}>📷 Photo Attached • Tap to View</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
 
                 {/* Interactive Action Footer */}
                 <View
@@ -889,6 +928,18 @@ export default function HomeScreen() {
                       {hasCorroborated
                         ? `Confirmed (${(item.corroborationCount || 1) + 1})`
                         : `Confirm Status (${item.corroborationCount || 1})`}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.feedActionBtn}
+                    onPress={() => router.push(`/hazard/${item.id}` as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel="View hazard details"
+                  >
+                    <BookOpen size={15} color={isDark ? Palette.snow : Palette.pineForest} />
+                    <Text style={[styles.feedActionBtnText, { color: isDark ? Palette.snow : Palette.pineForest }]}>
+                      Details
                     </Text>
                   </Pressable>
 
@@ -1429,6 +1480,32 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.bodySm,
     lineHeight: 18,
     marginBottom: Spacing.sm,
+  },
+  cardPhotoWrapper: {
+    borderRadius: Radii.md,
+    overflow: 'hidden',
+    marginVertical: Spacing.xs,
+    position: 'relative',
+    height: 180,
+    backgroundColor: '#00000015',
+  },
+  cardPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  cardPhotoOverlayBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radii.sm,
+  },
+  cardPhotoOverlayText: {
+    fontFamily: Typography.fontFamily.medium,
+    fontSize: 10,
+    color: Palette.snow,
   },
   cardFooter: {
     flexDirection: 'row',

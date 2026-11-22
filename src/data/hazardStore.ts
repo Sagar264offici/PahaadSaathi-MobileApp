@@ -206,8 +206,8 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
     mapped = supabaseHazards.map((h) => ({
       id: String(h.id),
       type: h.type,
-      location: h.location || h.description || h.area || 'Reported Mountain Location',
-      area: h.area || 'Chamoli Sector',
+      location: h.location || h.area || h.description || 'Reported Mountain Location',
+      area: h.area || 'Uttarakhand Highway',
       description: h.description || '',
       severity: (
         h.severity
@@ -332,19 +332,30 @@ export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'c
     updated_at: now.toISOString(),
   };
 
+  // Prepend locally so the poster sees their hazard card and photo immediately
+  hazards = [newReport, ...hazards.filter((h) => h.id !== newReport.id)];
+  notify();
+
   try {
-    await createSupabaseHazard({
+    const created = await createSupabaseHazard({
       type: newReport.type,
       description: newReport.description,
-      area: newReport.area ?? null,
+      area: newReport.location || newReport.area || null,
       severity: newReport.severity,
       latitude: newReport.latitude ?? null,
       longitude: newReport.longitude ?? null,
       photo_url: newReport.photo_url ?? null,
       reported_by: newReport.reportedBy,
       reported_by_role: newReport.reportedByRole,
+      reporter_phone: newReport.reporterPhone ?? null,
       status: newReport.status as ReportStatus,
     });
+
+    if (created && created.id) {
+      // Smoothly update local ID to matching Supabase UUID
+      hazards = hazards.map((h) => (h.id === newReport.id ? { ...h, id: String(created.id) } : h));
+      notify();
+    }
   } catch (error) {
     console.warn("Supabase insert not synchronized immediately, queued safely offline:", (error as any)?.message || error);
     await queueOfflineReport({
@@ -437,27 +448,44 @@ export function initRealtimeHazardSubscription(
       .channel('hazards-live-stream')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'hazards' },
+        { event: '*', schema: 'public', table: 'hazards' },
         (payload) => {
-          const raw = payload.new;
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            const updated = payload.new as any;
+            hazards = hazards.map((h) => {
+              if (h.id === String(updated.id)) {
+                return {
+                  ...h,
+                  status: (updated.status || h.status) as ReportStatus,
+                  corroborationCount: updated.corroboration_count ?? h.corroborationCount,
+                  updated_at: updated.updated_at || new Date().toISOString(),
+                };
+              }
+              return h;
+            });
+            notify();
+            return;
+          }
+
+          const raw = payload.new as any;
           if (!raw) return;
 
           const newHazard: Hazard = {
             id: String(raw.id),
             type: raw.type as HazardType,
-            location: raw.description || raw.area || 'Reported Mountain Location',
-            area: raw.area || 'Chamoli Sector',
+            location: raw.location || raw.area || raw.description || 'Reported Mountain Location',
+            area: raw.area || 'Uttarakhand Highway',
             description: raw.description || '',
-            severity: (raw.severity ? raw.severity.charAt(0).toUpperCase() + raw.severity.slice(1) : 'High') as Severity,
+            severity: (raw.severity ? raw.severity.charAt(0).toUpperCase() + raw.severity.slice(1).toLowerCase() : 'High') as Severity,
             status: (raw.status || 'reported') as ReportStatus,
             time: 'Just now',
             sample: false,
-            latitude: raw.lat ?? raw.latitude ?? 30.5564,
-            longitude: raw.lng ?? raw.longitude ?? 79.5638,
+            latitude: raw.latitude ?? raw.lat ?? 30.5564,
+            longitude: raw.longitude ?? raw.lng ?? 79.5638,
             photo_url: raw.photo_url ?? null,
             reportedBy: raw.reported_by || 'Nearby Resident',
             reportedByRole: raw.reported_by_role || 'resident',
-            corroborationCount: 1,
+            corroborationCount: raw.corroboration_count ?? 1,
             created_at: raw.created_at || new Date().toISOString(),
           };
 

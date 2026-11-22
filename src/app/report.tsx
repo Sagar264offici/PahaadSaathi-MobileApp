@@ -215,8 +215,16 @@ export default function ReportScreen() {
         try {
           const { uploadHazardPhoto } = await import('@/lib/storage');
           const up = await uploadHazardPhoto(photo);
-          photoUrl = up.url ?? photo.uri ?? null;
-        } catch {
+          if (up.success && up.url) {
+            photoUrl = up.url;
+          } else if (up.url) {
+            photoUrl = up.url;
+          } else {
+            console.warn('Storage upload fallback:', up.error);
+            photoUrl = photo.uri ?? null;
+          }
+        } catch (err) {
+          console.warn('Storage upload caught exception:', err);
           photoUrl = photo.uri ?? null;
         }
       }
@@ -224,13 +232,14 @@ export default function ReportScreen() {
       await addHazard({
         type: hazardType,
         location: locationText.trim(),
+        area: locationText.trim(),
         description: description.trim(),
         severity,
         status: 'reported',
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
         photo_url: photoUrl,
-        reportedBy: user?.name ?? 'Anonymous',
+        reportedBy: user?.name ?? 'Mountain Resident',
         reportedByRole: user?.role ?? 'resident',
         reporterPhone: reporterPhone.trim() || null,
       });
