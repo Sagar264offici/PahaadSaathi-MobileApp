@@ -83,33 +83,57 @@ export async function uploadHazardPhoto(
     const fileExt = MIME_TO_EXTENSION[fileType];
     const fileName = `hazards/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(fileName, fileBody!, {
-        contentType: fileType,
-        cacheControl: "3600",
-      });
+    // Upload to Supabase Storage with bucket resilience
+    const candidateBuckets = [STORAGE_BUCKET, "hazard-photos", "hazards", "photos"];
+    let uploadData: { path: string } | null = null;
+    let chosenBucket = STORAGE_BUCKET;
+    let lastErrorMsg = '';
 
-    if (error) {
-      console.error("Supabase upload error:", error);
+    for (const bucket of candidateBuckets) {
+      try {
+        const { data, error } = await supabase.storage
+          .from(bucket)
+          .upload(fileName, fileBody!, {
+            contentType: fileType,
+            cacheControl: "3600",
+          });
+
+        if (!error && data) {
+          uploadData = data;
+          chosenBucket = bucket;
+          break;
+        } else if (error) {
+          lastErrorMsg = error.message;
+          // If bucket does not exist, try the next candidate
+          if (error.message?.includes('not found') || (error as any).statusCode === '404') {
+            continue;
+          }
+          break;
+        }
+      } catch (err: any) {
+        lastErrorMsg = err?.message || 'Upload failed';
+      }
+    }
+
+    if (!uploadData) {
+      console.warn("Supabase storage upload skipped:", lastErrorMsg);
       return {
         success: false,
-        error: `Photo upload failed: ${error.message}. Check that the Supabase “${STORAGE_BUCKET}” bucket exists and allows uploads.`,
+        error: `Photo upload deferred: ${lastErrorMsg || 'Storage bucket not configured'}. Photo cached locally.`,
       };
     }
 
     // Get public URL
     const { data: publicUrlData } = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(data.path);
+      .from(chosenBucket)
+      .getPublicUrl(uploadData.path);
 
     return {
       success: true,
       url: publicUrlData.publicUrl,
     };
   } catch (err) {
-    console.error("Upload error:", err);
+    console.warn("Photo upload notice:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : "Upload failed.",

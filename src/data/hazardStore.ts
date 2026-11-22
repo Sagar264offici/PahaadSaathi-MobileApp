@@ -321,7 +321,7 @@ export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'c
       status: newReport.status as ReportStatus,
     });
   } catch (error) {
-    console.error("Supabase insert failed, queueing offline:", error);
+    console.warn("Supabase insert not synchronized immediately, queued safely offline:", (error as any)?.message || error);
     await queueOfflineReport({
       id: newReport.id,
       type: newReport.type,

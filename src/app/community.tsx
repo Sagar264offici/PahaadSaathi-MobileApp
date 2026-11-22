@@ -40,6 +40,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { Badge } from '@/components/ui/Badge';
 import { StatusLabel } from '@/components/ui/StatusLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { BottomNavigation } from '@/components/BottomNavigation';
 
 type CommunityTab = 'feed' | 'help' | 'volunteers' | 'resources';
 
@@ -857,24 +858,6 @@ export default function CommunityScreen() {
                     theme.name === 'dark' ? Palette.snow : Palette.slate,
                 },
               ]}
-              placeholder="Your Name (Optional)"
-              placeholderTextColor={Palette.slateMuted}
-              value={requesterName}
-              onChangeText={setRequesterName}
-            />
-
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor:
-                    theme.name === 'dark'
-                      ? Palette.surfaceDark
-                      : Palette.stoneLight,
-                  color:
-                    theme.name === 'dark' ? Palette.snow : Palette.slate,
-                },
-              ]}
               placeholder="Exact Location / Ward / Landmark"
               placeholderTextColor={Palette.slateMuted}
               value={helpLocation}
@@ -900,6 +883,8 @@ export default function CommunityScreen() {
           </View>
         </View>
       </Modal>
+
+      <BottomNavigation />
     </SafeAreaView>
   );
 }

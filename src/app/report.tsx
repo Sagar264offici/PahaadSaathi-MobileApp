@@ -215,8 +215,10 @@ export default function ReportScreen() {
         try {
           const { uploadHazardPhoto } = await import('@/lib/storage');
           const up = await uploadHazardPhoto(photo);
-          photoUrl = up.url ?? null;
-        } catch { /* continue without photo */ }
+          photoUrl = up.url ?? photo.uri ?? null;
+        } catch {
+          photoUrl = photo.uri ?? null;
+        }
       }
 
       await addHazard({

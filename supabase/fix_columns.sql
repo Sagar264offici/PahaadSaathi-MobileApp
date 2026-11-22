@@ -128,3 +128,22 @@ CREATE POLICY "Officers can view verification log"
 DROP POLICY IF EXISTS "Officers can insert verification log" ON public.verification_log;
 CREATE POLICY "Officers can insert verification log"
   ON public.verification_log FOR INSERT WITH CHECK (true);
+
+-- Fix 4: Allow anonymous & authenticated hazard reports in emergency
+DROP POLICY IF EXISTS "Authenticated users can report hazards" ON public.hazards;
+DROP POLICY IF EXISTS "Anyone can report hazards" ON public.hazards;
+CREATE POLICY "Anyone can report hazards"
+  ON public.hazards FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anyone can view hazards" ON public.hazards;
+CREATE POLICY "Anyone can view hazards"
+  ON public.hazards FOR SELECT
+  USING (true);
+
+-- Also relax severity check constraint if it strictly required lowercase
+ALTER TABLE public.hazards DROP CONSTRAINT IF EXISTS hazards_severity_check;
+ALTER TABLE public.hazards ADD CONSTRAINT hazards_severity_check 
+  CHECK (lower(severity) in ('low', 'medium', 'high', 'critical'));
+
