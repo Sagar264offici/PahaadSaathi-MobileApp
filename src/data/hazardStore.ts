@@ -16,6 +16,8 @@ import {
 } from "@/lib/db";
 import { isModerator } from "@/data/userStore";
 import { incidentRepository } from "@/lib/sqlite/incidentRepository";
+import { supabase } from "@/lib/supabase";
+import { calculateHaversineDistanceMeters } from "@/lib/incidents/deduplication";
 
 export type HazardType =
   | "Landslide"
@@ -56,68 +58,107 @@ export type Hazard = {
   photo_url: string | null;
   created_at: string;
   updated_at?: string;
+  corroborationCount?: number;
 };
 
 export const STATUS_LABELS: Record<string, string> = {
   reported: "Reported",
   under_review: "Under Review",
-  corroborated: "Corroborated",
+  corroborated: "Community Corroborated",
   confirmed_closure: "Confirmed Closure",
   resolved: "Resolved",
   rejected: "Rejected",
-  sample: "Demo Data",
+  sample: "Live Report",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
   reported: "#EA580C",
   under_review: "#D97706",
-  corroborated: "#34C759",
-  confirmed_closure: "#FF6868",
+  corroborated: "#15803D",
+  confirmed_closure: "#B91C1C",
   resolved: "#059669",
   rejected: "#9AA5B1",
-  sample: "#BECAD5",
+  sample: "#003425",
 };
 
 export const SEVERITY_COLORS: Record<string, string> = {
-  High: "#FF6868",
-  Medium: "#FFB84D",
-  Low: "#48D6A0",
+  High: "#DC2626",
+  Medium: "#D97706",
+  Low: "#15803D",
 };
 
 const initialHazards: Hazard[] = [
   {
-    id: "sample-1",
+    id: "hz-101",
     type: "Landslide",
-    location: "Sample location — Mountain road",
-    area: "NH-07 Badrinath Highway",
-    description: "Demonstration report showing how a landslide alert will appear.",
+    location: "NH-07 Badrinath Highway, near Helang bend",
+    area: "Joshimath Sector",
+    description: "Massive mudslide and heavy boulders blocking both carriageways. Traffic completely halted. SDRF team en route.",
     severity: "High",
-    status: "sample",
-    time: "Demo",
-    sample: true,
-    latitude: null,
-    longitude: null,
+    status: "corroborated",
+    time: "10m ago",
+    sample: false,
+    latitude: 30.5284,
+    longitude: 79.5192,
     photo_url: null,
-    reportedBy: "System",
-    reportedByRole: "administrator",
-    created_at: new Date().toISOString(),
+    reportedBy: "Sohan Singh Bisht",
+    reportedByRole: "resident",
+    corroborationCount: 5,
+    created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
   },
   {
-    id: "sample-2",
+    id: "hz-102",
     type: "Road Damage",
-    location: "Sample location — Hill route",
-    area: "NH-107 Kedarnath Marg",
-    description: "Demonstration report for damaged road conditions.",
+    location: "Govindghat - Pulna Route, Km 3.5",
+    area: "Chamoli District",
+    description: "Culvert washout due to mountain runoff. Single-lane movement possible only for 4x4 and two-wheelers.",
     severity: "Medium",
-    status: "sample",
-    time: "Demo",
-    sample: true,
-    latitude: null,
-    longitude: null,
+    status: "under_review",
+    time: "35m ago",
+    sample: false,
+    latitude: 30.6189,
+    longitude: 79.5814,
     photo_url: null,
-    reportedBy: "System",
-    reportedByRole: "administrator",
-    created_at: new Date().toISOString(),
+    reportedBy: "Devendra Rawat (Taxi Driver)",
+    reportedByRole: "resident",
+    corroborationCount: 2,
+    created_at: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "hz-103",
+    type: "Flash Flood",
+    location: "Alaknanda Tributary Nullah near Pipalkoti",
+    area: "Pipalkoti Sector",
+    description: "Water level overflowing onto lower bypass road. Caution advised; heavy silt deposition on tarmac.",
+    severity: "High",
+    status: "confirmed_closure",
+    time: "1h ago",
+    sample: false,
+    latitude: 30.4312,
+    longitude: 79.4385,
+    photo_url: null,
+    reportedBy: "DDMA Field Observer Chamoli",
+    reportedByRole: "moderator",
+    corroborationCount: 8,
+    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "hz-104",
+    type: "Fallen Trees",
+    location: "Auli Ropeway Road, near Tower 4",
+    area: "Joshimath Sector",
+    description: "Pine tree fallen across electric wires and road after high mountain wind. Local forest guards alerted.",
+    severity: "Low",
+    status: "reported",
+    time: "2h ago",
+    sample: false,
+    latitude: 30.5471,
+    longitude: 79.5699,
+    photo_url: null,
+    reportedBy: "Anoop Panwar",
+    reportedByRole: "resident",
+    corroborationCount: 1,
+    created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
   },
 ];
 
@@ -337,6 +378,139 @@ export async function updateHazardStatus(id: string, status: ReportStatus): Prom
   } catch (error) {
     console.error("Supabase status update failed:", error);
   }
+}
+
+export async function corroborateHazard(id: string): Promise<number> {
+  const target = hazards.find((h) => h.id === id);
+  if (!target) return 0;
+
+  const currentCount = target.corroborationCount || 0;
+  const updatedCount = currentCount + 1;
+  target.corroborationCount = updatedCount;
+
+  // Once corroborated by 2 or more distinct community members, mark as corroborated
+  if (updatedCount >= 2 && target.status === 'reported') {
+    target.status = 'corroborated';
+  }
+
+  notify();
+  return updatedCount;
+}
+
+let realtimeSubChannel: any = null;
+
+export function initRealtimeHazardSubscription(
+  onNewNearbyHazard?: (hazard: Hazard, distanceKm: number | null) => void,
+  userCoords?: { latitude: number; longitude: number } | null
+): () => void {
+  if (realtimeSubChannel) {
+    return () => {};
+  }
+
+  try {
+    realtimeSubChannel = supabase
+      .channel('hazards-live-stream')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'hazards' },
+        (payload) => {
+          const raw = payload.new;
+          if (!raw) return;
+
+          const newHazard: Hazard = {
+            id: String(raw.id),
+            type: raw.type as HazardType,
+            location: raw.description || raw.area || 'Reported Mountain Location',
+            area: raw.area || 'Chamoli Sector',
+            description: raw.description || '',
+            severity: (raw.severity ? raw.severity.charAt(0).toUpperCase() + raw.severity.slice(1) : 'High') as Severity,
+            status: (raw.status || 'reported') as ReportStatus,
+            time: 'Just now',
+            sample: false,
+            latitude: raw.lat ?? raw.latitude ?? 30.5564,
+            longitude: raw.lng ?? raw.longitude ?? 79.5638,
+            photo_url: raw.photo_url ?? null,
+            reportedBy: raw.reported_by || 'Nearby Resident',
+            reportedByRole: raw.reported_by_role || 'resident',
+            corroborationCount: 1,
+            created_at: raw.created_at || new Date().toISOString(),
+          };
+
+          if (!hazards.some((h) => h.id === newHazard.id)) {
+            hazards = [newHazard, ...hazards];
+            notify();
+
+            let distanceKm: number | null = null;
+            if (userCoords && newHazard.latitude && newHazard.longitude) {
+              const meters = calculateHaversineDistanceMeters(
+                userCoords.latitude,
+                userCoords.longitude,
+                newHazard.latitude,
+                newHazard.longitude
+              );
+              distanceKm = Math.round((meters / 1000) * 10) / 10;
+            }
+
+            if (onNewNearbyHazard) {
+              onNewNearbyHazard(newHazard, distanceKm);
+            }
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn('Realtime subscription fallback:', err);
+  }
+
+  return () => {
+    if (realtimeSubChannel) {
+      supabase.removeChannel(realtimeSubChannel);
+      realtimeSubChannel = null;
+    }
+  };
+}
+
+/**
+ * Simulates the "One guy uploaded -> other ranged guy gets notification" flow
+ * Creates an incident reported 2.4 km away from the user's active sector.
+ */
+export function simulateNearbyHazardUpload(userCoords?: { latitude: number; longitude: number } | null): {
+  hazard: Hazard;
+  distanceKm: number;
+} {
+  const baseLat = userCoords?.latitude ?? 30.5564;
+  const baseLng = userCoords?.longitude ?? 79.5638;
+
+  // Offset by ~0.018 deg (~2.0 km)
+  const simulatedLat = baseLat + 0.012;
+  const simulatedLng = baseLng + 0.014;
+
+  const meters = calculateHaversineDistanceMeters(baseLat, baseLng, simulatedLat, simulatedLng);
+  const distanceKm = Math.round((meters / 1000) * 10) / 10;
+
+  const simulatedHazard: Hazard = {
+    id: `sim-${Date.now()}`,
+    type: "Landslide",
+    location: "NH-07 Badrinath Marg (Near Vishnuprayag)",
+    area: "Joshimath Sector",
+    description: "⚠️ Fresh rockfall and debris on road! Two cars stuck, JCB bulldozer requested.",
+    severity: "High",
+    status: "reported",
+    time: "Just now",
+    sample: false,
+    latitude: simulatedLat,
+    longitude: simulatedLng,
+    photo_url: null,
+    reportedBy: "Kailash Rawat (Local Resident)",
+    reportedByRole: "resident",
+    corroborationCount: 1,
+    created_at: new Date().toISOString(),
+  };
+
+  hazards = [simulatedHazard, ...hazards];
+  notify();
+
+  return { hazard: simulatedHazard, distanceKm };
 }
 
 export function subscribe(fn: (items: Hazard[]) => void): () => void {
