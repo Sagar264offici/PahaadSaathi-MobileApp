@@ -204,28 +204,31 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
 
   if (online && supabaseHazards.length > 0) {
     mapped = supabaseHazards.map((h) => ({
-      id: h.id,
+      id: String(h.id),
       type: h.type,
-      location: h.description,
-      area: h.area,
-      description: h.description,
+      location: h.location || h.description || h.area || 'Reported Mountain Location',
+      area: h.area || 'Chamoli Sector',
+      description: h.description || '',
       severity: (
-        h.severity.charAt(0).toUpperCase() + h.severity.slice(1)
+        h.severity
+          ? (h.severity.charAt(0).toUpperCase() + h.severity.slice(1).toLowerCase())
+          : 'Medium'
       ) as Severity,
-      status: h.status as ReportStatus,
+      status: (h.status || 'reported') as ReportStatus,
       time: h.created_at
         ? new Date(h.created_at).toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
           })
-        : "",
+        : "Just now",
       sample: false,
-      latitude: h.latitude ?? null,
-      longitude: h.longitude ?? null,
+      latitude: h.latitude ?? h.lat ?? null,
+      longitude: h.longitude ?? h.lng ?? null,
       photo_url: h.photo_url ?? null,
-      reportedBy: h.reported_by,
-      reportedByRole: h.reported_by_role,
-      created_at: h.created_at,
+      reportedBy: h.reported_by || 'Verified Citizen',
+      reportedByRole: h.reported_by_role || 'resident',
+      corroborationCount: h.corroboration_count ?? 1,
+      created_at: h.created_at || new Date().toISOString(),
       updated_at: h.updated_at,
     }));
     const cached: CachedHazard[] = mapped.map((h) => ({
@@ -237,8 +240,8 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
       status: h.status,
       time: h.time,
       sample: false,
-      latitude: null,
-      longitude: null,
+      latitude: h.latitude,
+      longitude: h.longitude,
       photo_url: h.photo_url ?? null,
       fetched_at: Date.now(),
     }));
@@ -261,7 +264,16 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
       reportedBy: item.reportedBy,
       created_at: item.created_at || new Date().toISOString(),
     }));
-    hazards = [...mapped, ...hazards.filter((h) => h.sample), ...relayedFromCache];
+
+    const seenIds = new Set<string>();
+    const deduplicated: Hazard[] = [];
+    for (const item of [...mapped, ...hazards.filter((h) => h.sample), ...relayedFromCache]) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        deduplicated.push(item);
+      }
+    }
+    hazards = deduplicated;
   } else {
     const cached = await getCachedHazards();
     mapped = cached.map((h) => ({
@@ -281,11 +293,24 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
       reportedBy: h.reportedBy,
       created_at: h.created_at || new Date().toISOString(),
     }));
-    hazards = [...mapped, ...hazards.filter((h) => h.sample)];
+
+    const seenIds = new Set<string>();
+    const deduplicated: Hazard[] = [];
+    for (const item of [...mapped, ...hazards.filter((h) => h.sample)]) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        deduplicated.push(item);
+      }
+    }
+    hazards = deduplicated;
   }
 
   notify();
   return hazards;
+}
+
+export async function refreshHazards(): Promise<Hazard[]> {
+  return fetchHazardsFromSupabase();
 }
 
 export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'created_at' | 'updated_at'>): Promise<void> {

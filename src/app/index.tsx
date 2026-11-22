@@ -5,6 +5,7 @@ import {
   Linking,
   Platform,
   Pressable,
+  RefreshControl,
   Share,
   StatusBar,
   StyleSheet,
@@ -50,6 +51,7 @@ import {
   corroborateHazard,
   initRealtimeHazardSubscription,
   simulateNearbyHazardUpload,
+  refreshHazards,
 } from '@/data/hazardStore';
 import { calculateHaversineDistanceMeters } from '@/lib/incidents/deduplication';
 import { communityStore } from '@/data/communityStore';
@@ -113,6 +115,16 @@ export default function HomeScreen() {
   }, [notifSlideAnim]);
 
   const activeCommunity = communityStore.getCommunities()[0]; // Default Joshimath, Chamoli
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshHazards();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   // Request GPS position for precise distance calculation
   useEffect(() => {
@@ -138,6 +150,14 @@ export default function HomeScreen() {
   useEffect(() => {
     const unsubHazards = subscribe((items) => setHazards(items));
 
+    // Initial fetch from remote Supabase table so all community reports immediately display
+    refreshHazards().catch(() => {});
+
+    // Polling fallback every 15s ensures reports from friends appear reliably
+    const pollInterval = setInterval(() => {
+      refreshHazards().catch(() => {});
+    }, 15000);
+
     // Connect to Supabase Realtime channel for incoming uploads from other users
     const unsubRealtime = initRealtimeHazardSubscription((incomingHazard, dist) => {
       const distance = dist ?? 2.4;
@@ -157,6 +177,7 @@ export default function HomeScreen() {
     })();
 
     return () => {
+      clearInterval(pollInterval);
       unsubHazards();
       unsubRealtime();
     };
@@ -379,6 +400,14 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={isDark ? Palette.pineForestContainer : Palette.pineForest}
+              colors={[Palette.pineForest]}
+            />
+          }
           {...(Platform.OS === 'web' ? ({ tabIndex: 0, 'aria-label': 'Live Incident Feed' } as any) : {})}
         >
           {/* Urgent SOS Trigger Banner */}

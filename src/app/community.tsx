@@ -312,71 +312,222 @@ export default function CommunityScreen() {
             {selectedCommunity.description}
           </Text>
 
-          <View style={styles.overviewStatsRow}>
+          <View
+            style={[
+              styles.overviewStatsRow,
+              {
+                borderColor:
+                  theme.name === 'dark'
+                    ? Palette.surfaceDarkBorder
+                    : Palette.stone,
+              },
+            ]}
+          >
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
+              <Text
+                style={[
+                  styles.statNumber,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.pineForestContainer
+                        : Palette.pineForest,
+                  },
+                ]}
+              >
                 {selectedCommunity.activeHazardsCount}
               </Text>
-              <Text style={styles.statLabel}>Active Hazards</Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.stone
+                        : Palette.slateMuted,
+                  },
+                ]}
+              >
+                Active Hazards
+              </Text>
             </View>
-            <View style={styles.statDivider} />
+            <View
+              style={[
+                styles.statDivider,
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? Palette.surfaceDarkBorder
+                      : Palette.stone,
+                },
+              ]}
+            />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{helpRequests.length}</Text>
-              <Text style={styles.statLabel}>Help Requests</Text>
+              <Text
+                style={[
+                  styles.statNumber,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.pineForestContainer
+                        : Palette.pineForest,
+                  },
+                ]}
+              >
+                {helpRequests.length}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.stone
+                        : Palette.slateMuted,
+                  },
+                ]}
+              >
+                Help Requests
+              </Text>
             </View>
-            <View style={styles.statDivider} />
+            <View
+              style={[
+                styles.statDivider,
+                {
+                  backgroundColor:
+                    theme.name === 'dark'
+                      ? Palette.surfaceDarkBorder
+                      : Palette.stone,
+                },
+              ]}
+            />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{volunteers.length}</Text>
-              <Text style={styles.statLabel}>Verified Volunteers</Text>
+              <Text
+                style={[
+                  styles.statNumber,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.pineForestContainer
+                        : Palette.pineForest,
+                  },
+                ]}
+              >
+                {volunteers.length}
+              </Text>
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color:
+                      theme.name === 'dark'
+                        ? Palette.stone
+                        : Palette.slateMuted,
+                  },
+                ]}
+              >
+                Verified Volunteers
+              </Text>
             </View>
           </View>
 
           <View style={styles.hotlineRow}>
-            <PhoneCall size={16} color={Palette.rescueRed} />
-            <Text style={styles.hotlineLabel}>Tehsil Emergency Control:</Text>
+            <PhoneCall
+              size={16}
+              color={theme.name === 'dark' ? '#F87171' : Palette.rescueRed}
+            />
+            <Text
+              style={[
+                styles.hotlineLabel,
+                {
+                  color:
+                    theme.name === 'dark' ? Palette.stone : Palette.slate,
+                },
+              ]}
+            >
+              Tehsil Emergency Control:
+            </Text>
             <Pressable
               onPress={() =>
                 Linking.openURL(`tel:${selectedCommunity.emergencyHotline}`)
               }
             >
-              <Text style={styles.hotlineNumber}>
+              <Text
+                style={[
+                  styles.hotlineNumber,
+                  {
+                    color:
+                      theme.name === 'dark' ? '#F87171' : Palette.rescueRed,
+                  },
+                ]}
+              >
                 {selectedCommunity.emergencyHotline}
               </Text>
             </Pressable>
           </View>
         </View>
 
-        {/* Tab Navigation */}
-        <View style={styles.tabsRow}>
-          {[
-            { id: 'feed', label: 'Feed & Alerts', icon: AlertCircle },
-            { id: 'help', label: 'Help Exchange', icon: HelpCircle },
-            { id: 'volunteers', label: 'Volunteers', icon: ShieldCheck },
-            { id: 'resources', label: 'Shelters & PHC', icon: Building },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <Pressable
-                key={tab.id}
-                style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                onPress={() => setActiveTab(tab.id as CommunityTab)}
-              >
-                <Icon
-                  size={16}
-                  color={isActive ? Palette.snow : Palette.slate}
-                />
-                <Text
+        {/* Tab Navigation - Horizontal Scrollable to prevent any squishing or overlap */}
+        <View style={styles.tabsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsScrollContent}
+          >
+            {[
+              { id: 'feed', label: 'Feed & Alerts', icon: AlertCircle },
+              { id: 'help', label: 'Help Exchange', icon: HelpCircle },
+              { id: 'volunteers', label: 'Volunteers', icon: ShieldCheck },
+              { id: 'resources', label: 'Shelters & PHC', icon: Building },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              const isDark = theme.name === 'dark';
+              const activeBg = isDark
+                ? Palette.pineForestContainer
+                : Palette.pineForest;
+              const activeTextColor = isDark ? '#064E3B' : Palette.snow;
+              const inactiveBg = isDark
+                ? Palette.surfaceDarkElevated
+                : Palette.stoneLight;
+              const inactiveTextColor = isDark ? Palette.stone : Palette.slate;
+              const border = isActive
+                ? activeBg
+                : isDark
+                ? Palette.surfaceDarkBorder
+                : Palette.stone;
+
+              return (
+                <Pressable
+                  key={tab.id}
                   style={[
-                    styles.tabButtonText,
-                    isActive && styles.tabButtonTextActive,
+                    styles.tabButton,
+                    {
+                      backgroundColor: isActive ? activeBg : inactiveBg,
+                      borderColor: border,
+                    },
                   ]}
+                  onPress={() => setActiveTab(tab.id as CommunityTab)}
                 >
-                  {tab.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Icon
+                    size={16}
+                    color={isActive ? activeTextColor : inactiveTextColor}
+                  />
+                  <Text
+                    style={[
+                      styles.tabButtonText,
+                      {
+                        color: isActive ? activeTextColor : inactiveTextColor,
+                        fontWeight: isActive ? '700' : '600',
+                      },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Tab 1: Community Feed */}
@@ -1027,32 +1178,27 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.caption,
     color: Palette.rescueRed,
   },
-  tabsRow: {
-    flexDirection: 'row',
-    backgroundColor: Palette.stoneLight,
-    borderRadius: Radii.md,
-    padding: 3,
+  tabsContainer: {
     marginBottom: Spacing.md,
   },
+  tabsScrollContent: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    paddingRight: Spacing.md,
+  },
   tabButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: Radii.sm,
-    gap: 4,
-  },
-  tabButtonActive: {
-    backgroundColor: Palette.pineForest,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: Radii.full,
+    borderWidth: 1,
+    gap: 6,
   },
   tabButtonText: {
     fontFamily: Typography.fontFamily.semibold,
     fontSize: Typography.fontSize.caption,
-    color: Palette.slate,
-  },
-  tabButtonTextActive: {
-    color: Palette.snow,
   },
   tabContent: {
     marginBottom: Spacing.xl,
