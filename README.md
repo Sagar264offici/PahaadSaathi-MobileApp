@@ -1,171 +1,211 @@
-# PahaadSaathi
+# PahaadSaathi 2.0 (पहाड़ साथी)
 
-**A simple mountain-travel safety companion for reporting hazards, checking route risks, and sharing alerts.**
+[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen.svg)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)]()
+[![React Native](https://img.shields.io/badge/React%20Native-0.88-black.svg)]()
+[![Expo](https://img.shields.io/badge/Expo%20SDK-58-black.svg)]()
+[![NVIDIA AI](https://img.shields.io/badge/NVIDIA%20AI-PaliGemma%20Vision-76B900.svg)]()
+[![Supabase](https://img.shields.io/badge/Supabase-Realtime%20%2B%20PostGIS-3ECF8E.svg)]()
 
-PahaadSaathi is a cross-platform mobile app built with Expo and React Native. Travellers can report road and weather hazards, attach a photo and location, browse recent reports, review route risks, and share an emergency location. When mobile data is unavailable, the app can relay short safety alerts over Bluetooth to nearby PahaadSaathi devices.
+> **Autonomous Mountain-Road Safety, Offline BLE Mesh & NVIDIA AI Vision Verification Companion**  
+> Built for the Himalayan terrain, Char Dham Yatra pilgrims, local mountain communities, and District Emergency Control Rooms in Uttarakhand.
 
-> **Safety note:** PahaadSaathi is a community aid, not an emergency service or a substitute for official road, weather, or rescue information. For immediate danger in India, call 112. Bluetooth works only between nearby devices; it does not send a message directly across 25 km. Longer-distance delivery depends on other participating phones relaying the alert and is not guaranteed.
+---
 
-## Features
+## 🏔️ Overview
 
-- **Hazard reports:** report landslides, road damage, waterlogging, accidents, fallen trees, or another hazard; add a description, severity, coordinates, and optional photo.
-- **Hazard feed:** browse reports, see their status and severity, and open report details.
-- **Offline report queue:** keep reports on the device while offline and sync queued reports when connectivity returns.
-- **Bluetooth safety relay:** opt in to nearby Bluetooth Low Energy discovery and send/forward short alerts using store-and-forward queuing. Relay requires a native development or release build and Bluetooth permissions; it is not available in Expo Go or the web app.
-- **Route planning and hazard awareness:** search for places, choose a car, motorcycle, or truck profile, calculate routes through a configured Valhalla service, and inspect hazards near a route.
-- **Emergency assistance:** open emergency calling options and prepare the current location for sharing through SMS or WhatsApp. The user reviews and sends the message in the device’s messaging app.
-- **Light and dark themes:** choose a theme using the sun/moon control; the preference is saved on the device.
-- **Responsive navigation:** minimal home, report, and feed views, with animated scrolling and layouts for mobile and web.
-- **Moderator dashboard:** moderator sign-in and report review/status and vehicle restrictions, gated by Supabase Auth and a `moderators` membership row.
+Travelling across high-altitude Himalayan corridors (Badrinath, Kedarnath, Joshimath, Uttarkashi, Devprayag, Dhari Devi) poses extreme hazards: sudden cloudbursts, falling rocks, seasonal landslides, road subsidence, and total cellular blackouts.
 
-## Screens
+**PahaadSaathi 2.0** solves these challenges by combining:
+1. **Instant Crowdsourced Hazard Reporting** with GPS coordinates and photo evidence.
+2. **NVIDIA PaliGemma Vision AI Verification** running on the backend to evaluate visual photo evidence against reported claims, filtering misinformation and optical noise.
+3. **Multi-Device Real-Time Sync & Feed** that immediately broadcasts verified hazards and photos from Phone A to Phone B across geographic wards.
+4. **Offline-First Store-and-Forward Mesh** leveraging SQLite queues, BLE (Bluetooth Low Energy) multi-hop relays (up to 5 hops), and GSM 03.38 septet-counted Emergency SMS when Internet connectivity drops to zero.
+5. **Smart Mountain Routing & 3-Letter Autocomplete** with curated Himalayan passes and Valhalla vehicle-specific hazard collision analysis (Car, 4x4, Motorcycle, Heavy Truck).
+6. **District Control Room Dashboard** giving disaster response officers real-time triage tools, AI evidence audit trails, and road closure authority.
 
-| Screen | What it does |
-| --- | --- |
-| Home | Quick access to reporting, recent hazards, emergency tools, and Bluetooth relay state |
-| Map | Search locations, calculate a route, select a vehicle type, and review nearby hazard warnings |
-| Hazard details | View a report and share its safety card or location |
-| Emergency assistance | Call listed hotlines or open SMS/WhatsApp with a location message ready |
-| Offline relay | Enable Bluetooth discovery and view relay device/queue information |
-| Account / sign-in | Save a local traveller profile on this device |
-| Moderator | Sign in through Supabase and review reports if the account is an authorized moderator |
+---
 
-## Technology
+## 🔄 End-to-End System Workflow
 
-- **App:** React Native 0.88, React 19, TypeScript 6
-- **Platform/build:** Expo SDK 58, Expo Router, EAS Build
-- **UI and device features:** React Native SVG, Reanimated, Expo Image, Expo Location, Expo Image Picker, Expo SMS, Expo Sharing, Expo SQLite
-- **Bluetooth:** `munim-bluetooth` and `react-native-nitro-modules` for native BLE central/peripheral support
-- **Data and connectivity:** Supabase JavaScript client, AsyncStorage, SQLite, NetInfo
-- **Routing:** Valhalla-compatible directions endpoint; Photon geocoding and curated Himalayan location data
-- **Languages/platforms:** TypeScript; iOS, Android, and web (Bluetooth is native-only)
+```mermaid
+flowchart TD
+    subgraph Client ["Citizen & Traveller App (React Native / Expo)"]
+        A[User captures Hazard Photo & Details] --> B{Network Available?}
+        B -- Yes --> C[Upload Photo to Supabase Storage]
+        C --> D[Insert Report to Supabase 'hazards']
+        B -- No --> E[Queue in SQLite Outbox]
+        E --> F[BLE Mesh Store-and-Forward Relay]
+        E --> G[GSM 03.38 Encoded Emergency SMS]
+    end
 
-## Requirements
+    subgraph Backend ["Backend & AI Verification Engine"]
+        D --> H[Trigger AI Verification Engine]
+        H --> I[Fetch Photo & Prepare Base64 Data URI]
+        I --> J[NVIDIA PaliGemma Vision VLM]
+        J --> K[Evidence Analysis & Contradiction Detection]
+        K --> L[Update Hazard with Verdict & Technical Audit]
+    end
 
-- Node.js 20 or newer and npm
-- An iOS or Android device/emulator for native development
-- For EAS builds: an Expo account; Apple Developer account/signing for App Store distribution
-- A Supabase project configured with the database table, policies, and photo bucket below
-- A Valhalla routing endpoint if route calculation is required
+    subgraph MultiDevice ["Real-Time Citizen Feed"]
+        D -. Realtime Channel .-> M[Peer Phone Receives Live Feed Card]
+        L -. Realtime Update .-> M
+        M --> N[Peer Views Hazard Card, Photo & AI Verification Badge]
+    end
 
-## Get started
-
-```bash
-git clone https://github.com/Sagar264offici/PahaadSaathi-MobileApp.git
-cd PahaadSaathi-MobileApp
-npm ci
-cp .env.example .env
+    subgraph ControlRoom ["District Emergency Operations Centre (DEOC)"]
+        D --> O[Control Room Dashboard Triage Queue]
+        L --> O
+        O --> P{Officer Review}
+        P -- Verify --> Q[Mark Verified / Confirmed Closure]
+        P -- Re-verify --> H
+        P -- Reject --> R[Mark Rejected / Under Review]
+    end
 ```
 
-Fill the values in `.env`, then start the Expo development server:
+### Detailed Workflow Stages
 
+1. **Submission & Storage Resilience**:
+   - The user selects a hazard category (Landslide, Rockfall, Flooding, Damaged Road, Tree Fall, Snow / Ice), attaches description, GPS coordinates, and a photo.
+   - The photo is compressed and uploaded to the Supabase Storage bucket (`Hazard-Photos`). If network is down, the report is saved into a durable local SQLite outbox for automatic background retry with exponential backoff.
+2. **NVIDIA PaliGemma AI Image Verification**:
+   - The backend runs an image evidence analysis without exposing API keys to the client.
+   - The model examines whether rocks, debris, soil, cracks, or flood waters are visually present and matches them against the user's textual claim.
+   - Emits one of 4 standardized verdicts:
+     - `CONSISTENT`: Photographic evidence directly substantiates the hazard.
+     - `PARTIALLY_CONSISTENT`: Evidence partially supports claims, but severity may be overstated.
+     - `INCONSISTENT`: The photograph directly contradicts the claim (e.g. user reports a blocked road, but photo shows clean highway).
+     - `INSUFFICIENT_EVIDENCE`: Image is blurry, obstructed, dark, or lacks road context.
+3. **Instant Cross-Device Feed**:
+   - Supabase `postgres_changes` websocket channel relays new reports immediately to all active app instances within range.
+   - Peer phones instantly see the new hazard card with high-resolution photo, severity status, and AI badge.
+4. **Community Safety Ecosystem**:
+   - Micro-community feeds partitioned by Tehsil (Joshimath, Kedarnath Valley, Chamoli, Uttarkashi).
+   - Citizens and authorities share emergency hotlines, volunteer dispatch, shelter locations, and primary health centre (PHC) availability.
+5. **District Control Room Action**:
+   - Authorities retain ultimate decision authority (AI advises, human decides).
+   - Officers can inspect the AI confidence breakdown, read detected visual evidence vs contradictions, and trigger manual re-verification with one click.
+
+---
+
+## 📂 Repository Structure
+
+```text
+├── assets/                     # App branding, icons, and static graphics
+├── docs/                       # Technical design documents & architecture specs
+│   ├── CURRENT_ARCHITECTURE.md # Full architecture review
+│   ├── DATABASE_SCHEMA.md      # Postgres / PostGIS schema definitions
+│   ├── OFFLINE_ENGINE.md       # BLE store-and-forward & SQLite outbox spec
+│   └── SMS_ARCHITECTURE.md     # GSM 03.38 septet calculation & fallback spec
+├── src/
+│   ├── app/                    # Expo Router screens
+│   │   ├── (tabs)/             # Tab navigation (Home, Community, Map, Profile)
+│   │   ├── control-room/       # District Emergency Control Room officer portal
+│   │   ├── hazard/[id].tsx     # Hazard detail view with AI Verification Card
+│   │   ├── report.tsx          # Incident reporting flow with camera & GPS
+│   │   └── community.tsx       # Local Tehsil ecosystem (Feed, Help, Volunteers, Shelters)
+│   ├── components/             # Reusable UI components
+│   │   ├── HazardVerificationStatus.tsx # 7-state AI verification evidence UI
+│   │   ├── GooglePlaceAutocompletePicker.tsx # 3-letter instant mountain search
+│   │   └── BottomNavigation.tsx# Native responsive tab bar
+│   ├── data/                   # Data layers & MobX/reactive stores
+│   │   ├── hazardStore.ts      # Multi-device sync, real-time feed & offline outbox
+│   │   └── communityStore.ts   # Tehsil-level emergency directory & volunteer posts
+│   ├── lib/
+│   │   ├── hazardVerification.ts # Core NVIDIA PaliGemma verification engine
+│   │   ├── storage.ts          # Resilient Supabase photo upload
+│   │   ├── supabase.ts         # Supabase client singleton & offline fallback
+│   │   ├── routing/            # Valhalla routing & hazard proximity calculation
+│   │   ├── relay/              # BLE mesh protocol & store-and-forward engine
+│   │   └── sms/                # GSM-7 encoded emergency SMS dispatch
+│   ├── theme/                  # Design tokens, Himalayan color palette, typography
+│   └── types/                  # TypeScript contracts & verification data models
+├── supabase/
+│   ├── functions/
+│   │   └── verify-hazard-image/# Supabase Deno Edge Function for PaliGemma
+│   ├── migrations/             # Additive migrations (core schema + AI verification)
+│   └── fix_columns.sql         # Idempotent database schema repair script
+├── package.json
+└── tsconfig.json
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technologies |
+| --- | --- |
+| **Frontend Framework** | React Native 0.88, React 19, Expo SDK 58, Expo Router |
+| **Language & Typings** | TypeScript 5.9 with strict type checking (0 errors) |
+| **AI Vision Verification** | NVIDIA PaliGemma Vision Language Model (`vlm/google/paligemma`) |
+| **Backend & Database** | Supabase, PostgreSQL 15, PostGIS, Deno Edge Functions |
+| **Offline & Mesh Relay** | Expo SQLite, `munim-bluetooth`, `react-native-nitro-modules` (BLE) |
+| **Routing & Geo-Search** | Valhalla Directions API, Photon Geocoder, Curated Himalayan Node Database |
+| **Testing** | Node.js native test runner (`tsx --test`), 39 automated unit & integration tests |
+
+---
+
+## ⚙️ Environment Configuration
+
+Create a `.env` file in the root directory (based on `.env.example`):
+
+```bash
+# Public Expo Variables (Bundled into client application)
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
+EXPO_PUBLIC_VALHALLA_URL=https://valhalla1.openstreetmap.de
+
+# Private Backend Variables (NEVER expose to client code or prefix with EXPO_PUBLIC_)
+NVIDIA_API_KEY=nvapi-your-nvidia-paligemma-api-key
+SUPABASE_SERVICE_ROLE_KEY=your-backend-service-role-key
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js 20 or newer
+- npm 10 or newer
+- Expo Go app on mobile (or Android Studio / Xcode for native BLE development)
+
+### 2. Installation
+```bash
+# Clone the repository
+git clone https://github.com/Sagar264offici/PahaadSaathi2.0.git
+cd PahaadSaathi2.0
+
+# Install dependencies
+npm install
+```
+
+### 3. Run Automated Tests
+Verify all 39 tests across verification, offline outbox, BLE relay, and SMS encoding:
+```bash
+npm run test
+```
+
+### 4. Start Expo Development Server
 ```bash
 npx expo start
 ```
+Scan the QR code with **Expo Go** on your Android or iOS devices.
 
-The BLE module needs native code. Create and run a development build with the appropriate platform tooling:
+---
 
-```bash
-npm run android
-npm run ios
-```
+## 🧪 Database & Storage Setup
 
-`npm run web` starts the web version. Web supports the app’s web-compatible screens, but not Bluetooth relay.
+1. In your **Supabase Dashboard**, navigate to the **SQL Editor**.
+2. Run [`supabase/fix_columns.sql`](supabase/fix_columns.sql) — this idempotently creates:
+   - `hazards` table with geo-coordinates, photo URLs, and severity fields.
+   - `ai_verification_*` columns (`status`, `result`, `verdict`, `model`, `error_code`, `attempts`).
+   - `idx_hazards_ai_status_verdict` performance indexes and RLS read/write policies.
+3. Ensure the storage bucket `Hazard-Photos` exists and has public read access for hazard imagery.
 
-## Environment variables
+---
 
-Create `.env` from `.env.example` for local development. Add the same `EXPO_PUBLIC_*` values to the EAS `production` environment before cloud builds. Expo public variables are included in the client app, so use only public client credentials here. **Never put a Supabase `service_role` key in this app or in a public repository.**
+## 🛡️ AI Ethics, Safety & Limitations
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `EXPO_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Supabase publishable/anonymous client key; database and storage policies still control access |
-| `EXPO_PUBLIC_VALHALLA_URL` | For route calculation | Base URL of a Valhalla-compatible `/route` API |
-
-## Supabase setup
-
-1. Create a Supabase project.
-2. Create a `hazards` table with the fields used by the app: `id`, `type`, `description`, `latitude`, `longitude`, `photo_url`, `created_at`, `status`, `severity`, and `blocked_vehicles`. Use a UUID or another ID type consistently with your project. Set suitable defaults for `id`, `created_at`, `status`, and `blocked_vehicles`.
-3. Enable Row Level Security and configure policies for public report creation and reading, plus moderator-only updates. The app’s publishable key is not a secret and does not bypass RLS.
-4. Create moderator accounts in Supabase Auth, then add each approved user's UUID to a `moderators` table with a `user_id` column. Apply RLS so only authorized moderators can read membership and update reports.
-5. In Supabase Dashboard → SQL Editor, run [`supabase/storage.sql`](supabase/storage.sql). It creates the exact `Hazard-Photos` bucket and allows image uploads under `hazards/` for anonymous/authenticated app users.
-
-The storage script makes the bucket public so report images can be displayed by URL. Anyone who obtains a public object URL can view that image. It limits uploads to 5 MB and JPEG, PNG, or WebP. Adjust bucket visibility and policies if that does not fit your deployment.
-
-Traveller profiles in the current account screens are stored locally on the device; they are not Supabase Auth accounts. Only the moderator flow uses Supabase Auth.
-
-## Bluetooth relay: what to expect
-
-The app scans and advertises a PahaadSaathi BLE service, connects to compatible nearby phones, and transfers alert messages in small chunks. Received alerts are deduplicated and can be forwarded onward while relay is active. Users must grant Bluetooth permissions and leave relay enabled. Bluetooth range is usually limited to the nearby area and varies with phones, terrain, obstacles, and radio conditions. A 25 km journey is possible only as a chain of phones that encounter one another and forward the message; the app cannot guarantee peers, background delivery, or end-to-end arrival. Bluetooth does not require people to manually pair in system settings, but devices still need to be nearby and have relay enabled.
-
-## Release builds
-
-Install EAS CLI and sign in:
-
-```bash
-npm install --global eas-cli
-eas login
-eas build:configure
-```
-
-Add the environment values in the Expo dashboard under the `production` environment (or use EAS environment commands), then build:
-
-```bash
-# Android installable APK for direct testing/sharing
-eas build --profile preview --platform android
-
-# Android store bundle (AAB)
-eas build --profile production --platform android
-
-# iOS App Store build (requires Apple signing)
-eas build --profile production --platform ios
-
-# Build both platforms
-eas build --profile production --platform all
-```
-
-EAS will guide you through Android signing key creation and iOS signing setup. Store builds still need the relevant Google Play/App Store listing, review, and release steps. Keep signing credentials private and backed up.
-
-## Repository scripts
-
-| Command | Purpose |
-| --- | --- |
-| `npm start` | Start Expo development server |
-| `npm run android` | Build/run the native Android app locally |
-| `npm run ios` | Build/run the native iOS app locally |
-| `npm run web` | Start the web version |
-| `npm run lint` | Run Expo ESLint checks |
-| `npx tsc --noEmit` | Check TypeScript types |
-
-## Project structure
-
-```text
-src/app/          Expo Router screens and routes
-src/components/   Shared UI components
-src/context/      App theme provider
-src/data/         Hazard and local profile state
-src/lib/          Supabase, storage, location, routing, and BLE relay services
-src/theme/        Theme definitions
-assets/           App icons, images, and fonts
-supabase/         Supabase setup SQL
-```
-
-## Privacy and operational notes
-
-- Location is requested when a feature needs it, such as reporting a coordinate or sharing an emergency location.
-- Emergency SMS and WhatsApp links open a compose/review flow; this app does not silently send a message.
-- Hazard photos are uploaded to Supabase Storage when configured; reports can be queued locally while offline.
-- Do not commit `.env`, signing files, private keys, or service-role credentials.
-- Review Supabase Row Level Security and storage policies before releasing publicly. Publishable keys are safe to bundle only when the policies are correctly restricted.
-- Public hazard reports and photo URLs may expose submitted location and image information. Tell users what is shared before launch and apply retention rules appropriate for your service.
-
-## Contributing
-
-1. Create a branch for your change.
-2. Keep secrets and generated native build files out of commits.
-3. Run `npx tsc --noEmit` and `npm run lint` before opening a pull request.
-4. Describe device, OS version, and steps to reproduce for Bluetooth or location issues.
-
-## License
-
-See [`LICENSE`](LICENSE).
+- **Advisory Role Only**: The NVIDIA PaliGemma AI engine provides evidence analysis for human decision-makers. It never autonomously closes roads, cancels emergency alerts, or deletes community reports.
+- **Privacy First**: User identifiers, phone numbers, and precise GPS coordinates are stripped before submitting images to the vision model.
+- **Fail-Safe Operation**: If the AI model times out or encounters rate limits (HTTP 429), the hazard report remains fully accessible and is marked for manual officer review without interrupting app functionality.

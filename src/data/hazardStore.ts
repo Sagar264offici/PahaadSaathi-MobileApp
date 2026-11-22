@@ -19,6 +19,12 @@ import { incidentRepository } from "@/lib/sqlite/incidentRepository";
 import { supabase } from "@/lib/supabase";
 import { calculateHaversineDistanceMeters } from "@/lib/incidents/deduplication";
 
+import {
+  AiVerificationResult,
+  AiVerificationStatus,
+  AiVerificationVerdict,
+} from "@/types/hazardVerification";
+
 export type HazardType =
   | "Landslide"
   | "Road Damage"
@@ -59,6 +65,13 @@ export type Hazard = {
   created_at: string;
   updated_at?: string;
   corroborationCount?: number;
+  ai_verification_status?: AiVerificationStatus | null;
+  ai_verification_verdict?: AiVerificationVerdict | null;
+  ai_verification_result?: AiVerificationResult | null;
+  ai_verified_at?: string | null;
+  ai_verification_model?: string | null;
+  ai_verification_error_code?: string | null;
+  ai_verification_attempts?: number;
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -230,6 +243,13 @@ export async function fetchHazardsFromSupabase(): Promise<Hazard[]> {
       corroborationCount: h.corroboration_count ?? 1,
       created_at: h.created_at || new Date().toISOString(),
       updated_at: h.updated_at,
+      ai_verification_status: h.ai_verification_status ?? 'pending',
+      ai_verification_verdict: h.ai_verification_verdict ?? null,
+      ai_verification_result: h.ai_verification_result ?? null,
+      ai_verified_at: h.ai_verified_at ?? null,
+      ai_verification_model: h.ai_verification_model ?? 'google/paligemma',
+      ai_verification_error_code: h.ai_verification_error_code ?? null,
+      ai_verification_attempts: h.ai_verification_attempts ?? 0,
     }));
     const cached: CachedHazard[] = mapped.map((h) => ({
       id: h.id,
@@ -355,6 +375,36 @@ export async function addHazard(item: Omit<Hazard, 'id' | 'time' | 'sample' | 'c
       // Smoothly update local ID to matching Supabase UUID
       hazards = hazards.map((h) => (h.id === newReport.id ? { ...h, id: String(created.id) } : h));
       notify();
+
+      // Trigger asynchronous AI verification in background
+      if (newReport.photo_url) {
+        setTimeout(() => {
+          import('@/lib/hazardVerification').then(({ verifyHazardWithNvidia }) => {
+            verifyHazardWithNvidia({
+              hazard_id: String(created.id),
+              photo_url: newReport.photo_url,
+              type: newReport.type,
+              description: newReport.description,
+            }).then((res) => {
+              if (res.result) {
+                const verifiedResult = res.result;
+                hazards = hazards.map((h) =>
+                  h.id === String(created.id)
+                    ? {
+                        ...h,
+                        ai_verification_status: 'completed',
+                        ai_verification_verdict: res.verdict,
+                        ai_verification_result: verifiedResult,
+                        ai_verified_at: verifiedResult.verified_at,
+                      }
+                    : h
+                );
+                notify();
+              }
+            }).catch(() => {});
+          });
+        }, 500);
+      }
     }
   } catch (error) {
     console.warn("Supabase insert not synchronized immediately, queued safely offline:", (error as any)?.message || error);
@@ -487,6 +537,13 @@ export function initRealtimeHazardSubscription(
             reportedByRole: raw.reported_by_role || 'resident',
             corroborationCount: raw.corroboration_count ?? 1,
             created_at: raw.created_at || new Date().toISOString(),
+            ai_verification_status: raw.ai_verification_status ?? 'pending',
+            ai_verification_verdict: raw.ai_verification_verdict ?? null,
+            ai_verification_result: raw.ai_verification_result ?? null,
+            ai_verified_at: raw.ai_verified_at ?? null,
+            ai_verification_model: raw.ai_verification_model ?? 'google/paligemma',
+            ai_verification_error_code: raw.ai_verification_error_code ?? null,
+            ai_verification_attempts: raw.ai_verification_attempts ?? 0,
           };
 
           if (!hazards.some((h) => h.id === newHazard.id)) {
@@ -572,6 +629,65 @@ export function subscribe(fn: (items: Hazard[]) => void): () => void {
     const idx = listeners.indexOf(fn);
     if (idx >= 0) listeners.splice(idx, 1);
   };
+}
+
+export async function verifyHazardById(
+  id: string,
+  options?: { force?: boolean }
+): Promise<AiVerificationResult | null> {
+  const target = hazards.find((h) => h.id === id);
+  if (!target) return null;
+
+  hazards = hazards.map((h) =>
+    h.id === id ? { ...h, ai_verification_status: 'processing' } : h
+  );
+  notify();
+
+  try {
+    const { verifyHazardWithNvidia } = await import('@/lib/hazardVerification');
+    const res = await verifyHazardWithNvidia({
+      hazard_id: target.id,
+      photo_url: target.photo_url,
+      type: target.type,
+      description: target.description,
+      force: options?.force,
+    });
+
+    if (res.result) {
+      const verifiedResult = res.result;
+      hazards = hazards.map((h) =>
+        h.id === id
+          ? {
+              ...h,
+              ai_verification_status: 'completed',
+              ai_verification_verdict: res.verdict,
+              ai_verification_result: verifiedResult,
+              ai_verified_at: verifiedResult.verified_at,
+            }
+          : h
+      );
+      notify();
+      return verifiedResult;
+    } else {
+      hazards = hazards.map((h) =>
+        h.id === id
+          ? {
+              ...h,
+              ai_verification_status: 'failed',
+              ai_verification_error_code: res.error_code,
+            }
+          : h
+      );
+      notify();
+      return null;
+    }
+  } catch (err) {
+    hazards = hazards.map((h) =>
+      h.id === id ? { ...h, ai_verification_status: 'failed' } : h
+    );
+    notify();
+    return null;
+  }
 }
 
 function notify(): void {

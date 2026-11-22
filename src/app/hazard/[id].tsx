@@ -18,7 +18,10 @@ import {
   getHazard,
   subscribe,
   updateHazardStatus,
+  verifyHazardById,
 } from "@/data/hazardStore";
+import { isModerator } from "@/data/userStore";
+import { HazardVerificationStatus } from "@/components/HazardVerificationStatus";
 import { useTheme } from "@/hooks/useTheme";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SmoothScrollView as ScrollView } from '@/components/SmoothScrollView';
@@ -51,6 +54,18 @@ export default function HazardDetails() {
   const { id } = useLocalSearchParams<{ id?: string }>();
 
   const [hazard, setHazard] = useState<Hazard | undefined>(undefined);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const userIsMod = isModerator();
+
+  const handleReverify = async () => {
+    if (!hazard) return;
+    setIsVerifying(true);
+    try {
+      await verifyHazardById(hazard.id, { force: true });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -226,6 +241,17 @@ export default function HazardDetails() {
               style={[styles.hazardPhoto, { backgroundColor: theme.backgroundSecondary }]}
             />
           )}
+
+          {/* NVIDIA AI Photographic Evidence Analysis */}
+          <HazardVerificationStatus
+            status={hazard.ai_verification_status}
+            verdict={hazard.ai_verification_verdict}
+            result={hazard.ai_verification_result}
+            photoUrl={hazard.photo_url}
+            isModerator={userIsMod}
+            isVerifying={isVerifying}
+            onReverify={handleReverify}
+          />
 
           {/* Key Metric Details */}
           <View style={[styles.infoGrid, { borderTopColor: theme.border }]}>

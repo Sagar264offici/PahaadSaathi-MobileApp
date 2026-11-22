@@ -139,8 +139,69 @@ CREATE POLICY "Anyone can view hazards"
   ON public.hazards FOR SELECT
   USING (true);
 
--- Also relax severity check constraint if it strictly required lowercase
-ALTER TABLE public.hazards DROP CONSTRAINT IF EXISTS hazards_severity_check;
-ALTER TABLE public.hazards ADD CONSTRAINT hazards_severity_check 
-  CHECK (lower(severity) in ('low', 'medium', 'high', 'critical'));
+-- Fix 5: NVIDIA AI Hazard Image Verification columns
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_status'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_status text DEFAULT 'pending' 
+      CHECK (ai_verification_status IN ('pending', 'processing', 'completed', 'failed'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_result'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_result jsonb;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_verdict'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_verdict text 
+      CHECK (ai_verification_verdict IN ('consistent', 'partially_consistent', 'inconsistent', 'insufficient_evidence'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verified_at'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verified_at timestamptz;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_model'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_model text DEFAULT 'google/paligemma';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_error_code'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_error_code text;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'hazards' AND column_name = 'ai_verification_attempts'
+  ) THEN
+    ALTER TABLE public.hazards 
+      ADD COLUMN ai_verification_attempts integer DEFAULT 0;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_hazards_ai_status_verdict 
+  ON public.hazards (ai_verification_status, ai_verification_verdict);
+
 

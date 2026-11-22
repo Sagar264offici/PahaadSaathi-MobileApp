@@ -48,3 +48,4 @@ example
 !.env.example
 .vercel
 .env*
+*.zip

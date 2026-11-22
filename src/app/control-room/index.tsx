@@ -37,6 +37,9 @@ import {
   Clock,
   AlertTriangle,
   User,
+  Sparkles,
+  Eye,
+  Camera,
 } from 'lucide-react-native';
 
 import { Palette, Radii, Spacing, Typography, Shadows } from '@/theme/tokens';
@@ -70,6 +73,9 @@ interface HazardReport {
   created_at: string;
   photo_url?: string;
   corroboration_count?: number;
+  ai_verification_status?: string | null;
+  ai_verification_verdict?: string | null;
+  ai_verification_result?: any;
 }
 
 interface VerificationLog {
@@ -587,6 +593,57 @@ export default function DistrictControlRoomScreen() {
                 {report.description}
               </Text>
 
+              {/* AI Verification Evidence Badge (if photo submitted) */}
+              {report.photo_url && (
+                <View style={styles.aiBadgeRow}>
+                  <View style={styles.aiVerdictBadge}>
+                    <Sparkles
+                      size={13}
+                      color={
+                        report.ai_verification_verdict === 'CONSISTENT'
+                          ? Palette.verifiedGreen
+                          : report.ai_verification_verdict === 'INCONSISTENT'
+                          ? Palette.rescueRed
+                          : report.ai_verification_verdict === 'PARTIALLY_CONSISTENT'
+                          ? Palette.saffron
+                          : Palette.pineForestMuted
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.aiVerdictText,
+                        report.ai_verification_verdict === 'CONSISTENT' && { color: Palette.verifiedGreen },
+                        report.ai_verification_verdict === 'INCONSISTENT' && { color: Palette.rescueRed },
+                        report.ai_verification_verdict === 'PARTIALLY_CONSISTENT' && { color: Palette.saffron },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {report.ai_verification_status === 'processing'
+                        ? (lang === 'en' ? 'AI: Analyzing Photo...' : 'एआई: विश्लेषण जारी...')
+                        : report.ai_verification_verdict === 'CONSISTENT'
+                        ? (lang === 'en' ? 'AI: Consistent with Photo' : 'एआई: तस्वीर से मेल खाता है')
+                        : report.ai_verification_verdict === 'INCONSISTENT'
+                        ? (lang === 'en' ? 'AI Alert: Photo Contradicts Report' : 'एआई अलर्ट: तस्वीर विपरीत है')
+                        : report.ai_verification_verdict === 'PARTIALLY_CONSISTENT'
+                        ? (lang === 'en' ? 'AI: Partial Visual Evidence' : 'एआई: आंशिक प्रमाण')
+                        : report.ai_verification_verdict === 'INSUFFICIENT_EVIDENCE'
+                        ? (lang === 'en' ? 'AI: Insufficient Photo Evidence' : 'एआई: अपर्याप्त प्रमाण')
+                        : (lang === 'en' ? 'AI: Evidence Pending' : 'एआई: जांच लंबित')}
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={styles.viewEvidenceBtn}
+                    onPress={() => router.push(`/hazard/${report.id}` as any)}
+                  >
+                    <Eye size={12} color={Palette.pineForest} />
+                    <Text style={styles.viewEvidenceBtnText}>
+                      {lang === 'en' ? 'Evidence' : 'प्रमाण'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+
               {/* Reporter Phone */}
               <View style={[styles.phoneRow, { borderColor: cardBorder }]}>
                 <User size={13} color={Palette.pineForestMuted} />
@@ -1101,5 +1158,41 @@ const styles = StyleSheet.create({
     borderRadius: Radii.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  aiBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radii.sm,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 4,
+    gap: 8,
+  },
+  aiVerdictBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  aiVerdictText: {
+    fontFamily: Typography.fontFamily.semibold,
+    fontSize: Typography.fontSize.caption,
+    color: Palette.slate,
+  },
+  viewEvidenceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radii.sm,
+  },
+  viewEvidenceBtnText: {
+    fontFamily: Typography.fontFamily.bold,
+    fontSize: 11,
+    color: Palette.pineForest,
   },
 });
