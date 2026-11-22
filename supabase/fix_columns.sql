@@ -94,9 +94,6 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
--- Drop old lowercase bucket if it exists
-DELETE FROM storage.buckets WHERE id = 'hazard-photos';
-
 -- Storage policy for Hazard-Photos
 DROP POLICY IF EXISTS "Allow Hazard-Photos uploads" ON storage.objects;
 CREATE POLICY "Allow Hazard-Photos uploads"
