@@ -7,6 +7,8 @@
  * Reference: https://photon.komoot.io/
  */
 
+import { searchMountainLocations } from '@/data/locations';
+
 export type PlaceCategory =
   | 'city'
   | 'town'
@@ -106,7 +108,7 @@ function mapCategory(osmCategory?: string, osmType?: string): {
 }
 
 /**
- * Search for places/landmarks using Photon geocoding API.
+ * Search for places/landmarks using offline Himalayan index + Photon geocoding API.
  */
 export async function searchPlaces(
   query: string,
@@ -114,19 +116,43 @@ export async function searchPlaces(
   lat?: number,
   lon?: number,
 ): Promise<LocationSearchResult> {
-  if (!query || query.trim().length < 2) {
+  const clean = (query || '').trim();
+  if (clean.length < 2) {
     return { results: [], query, total: 0 };
   }
 
-  const params = new URLSearchParams({
-    q: query.trim(),
-    limit: String(Math.min(limit, 20)),
-  });
+  // 1. Instant local Himalayan offline directory match (0ms latency)
+  const localMatches = searchMountainLocations(clean, limit);
+  const localResults: PlaceResult[] = localMatches.map((loc) => ({
+    id: `local-${loc.name}-${loc.latitude}-${loc.longitude}`,
+    name: loc.name,
+    fullAddress: loc.full,
+    category: 'town',
+    categoryLabel: `${loc.region} • ${loc.corridor}`,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    source: 'himalayan_directory',
+  }));
 
-  if (lat !== undefined && lon !== undefined) {
-    params.set('lat', String(lat));
-    params.set('lon', String(lon));
+  // If local results are ample and query is short, return immediately
+  if (clean.length < 3 && localResults.length > 0) {
+    return {
+      results: localResults,
+      query,
+      total: localResults.length,
+    };
   }
+
+  // 2. Supplement with Photon online geocoding (biased towards Uttarakhand / Himalayas)
+  const biasLat = lat ?? 30.3;
+  const biasLon = lon ?? 78.5;
+
+  const params = new URLSearchParams({
+    q: clean,
+    limit: String(Math.min(limit, 10)),
+    lat: String(biasLat),
+    lon: String(biasLon),
+  });
 
   const url = `${PHOTON_API_BASE}?${params.toString()}`;
 
@@ -137,18 +163,18 @@ export async function searchPlaces(
         Accept: 'application/json',
         'User-Agent': 'PahaadSaathi/1.0 (mountain safety app)',
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(4000),
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        throw new Error('Search service rate limit exceeded. Try again later.');
-      }
-      throw new Error(`Search service returned status ${response.status}`);
+      return {
+        results: localResults,
+        query,
+        total: localResults.length,
+      };
     }
 
     const data = await response.json();
-
     const features: Array<{
       properties: {
         name?: string;
@@ -165,18 +191,18 @@ export async function searchPlaces(
       };
     }> = data.features || [];
 
-    const results: PlaceResult[] = features.map((feature) => {
+    const onlineResults: PlaceResult[] = features.map((feature) => {
       const props = feature.properties || {};
       const coords = feature.geometry?.coordinates || [0, 0];
-      const lon = coords[0];
-      const lat = coords[1];
+      const pLon = coords[0];
+      const pLat = coords[1];
       const { category, label } = mapCategory(
         (props as any).osm_value || '',
         (props as any).osm_type || ''
       );
 
       return {
-        id: props.osm_id || `${props.name || 'unknown'}-${lat}-${lon}`,
+        id: props.osm_id || `${props.name || 'unknown'}-${pLat}-${pLon}`,
         name: props.name || 'Unknown Location',
         fullAddress: [
           props.city || props.osmvalue,
@@ -187,24 +213,39 @@ export async function searchPlaces(
           .join(', '),
         category,
         categoryLabel: label,
-        latitude: lat,
-        longitude: lon,
+        latitude: pLat,
+        longitude: pLon,
         source: 'photon',
         osmId: props.osm_id,
         osmType: props.osm_type,
       };
     });
 
-    return {
-      results,
-      query,
-      total: results.length,
-    };
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Search request timed out. Please try again.');
+    // Merge: prioritize local Himalayan matches, then online results
+    const seenNames = new Set<string>();
+    const merged: PlaceResult[] = [];
+
+    for (const item of [...localResults, ...onlineResults]) {
+      const key = item.name.toLowerCase().trim();
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        merged.push(item);
+        if (merged.length >= limit) break;
+      }
     }
-    throw err instanceof Error ? err : new Error('Search failed');
+
+    return {
+      results: merged,
+      query,
+      total: merged.length,
+    };
+  } catch {
+    // If online search fails or times out, seamlessly return local results
+    return {
+      results: localResults,
+      query,
+      total: localResults.length,
+    };
   }
 }
 
