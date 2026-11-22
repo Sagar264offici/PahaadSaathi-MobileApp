@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Home, Users, Map, ShieldAlert, User } from 'lucide-react-native';
 import { Palette, Spacing, Typography } from '@/theme/tokens';
@@ -22,8 +22,7 @@ export function BottomNavigation() {
 
   return (
     <View
-      accessibilityRole="navigation"
-      {...({ role: 'navigation', 'aria-label': 'Main Navigation' } as any)}
+      {...(Platform.OS === 'web' ? ({ role: 'navigation', 'aria-label': 'Main Navigation' } as any) : {})}
       style={[
         styles.navWrapper,
         {
@@ -34,7 +33,7 @@ export function BottomNavigation() {
     >
       <View
         accessibilityRole="tablist"
-        {...({ role: 'tablist', 'aria-label': 'Navigation Tabs' } as any)}
+        {...(Platform.OS === 'web' ? ({ role: 'tablist', 'aria-label': 'Navigation Tabs' } as any) : {})}
         style={styles.container}
       >
         {navItems.map((item) => {
@@ -49,7 +48,7 @@ export function BottomNavigation() {
                 onPress={() => router.push(item.path as any)}
                 accessibilityRole="button"
                 accessibilityLabel="Emergency SOS"
-                {...({ role: 'button' } as any)}
+                {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
               >
                 <View style={styles.sosCircle}>
                   <Icon size={24} color={Palette.snow} />
@@ -74,7 +73,7 @@ export function BottomNavigation() {
               onPress={() => router.push(item.path as any)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              {...({ role: 'tab', 'aria-selected': isActive } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'tab', 'aria-selected': isActive } as any) : {})}
             >
               <Icon size={20} color={iconColor} />
               <Text

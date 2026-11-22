@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Linking,
+  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -104,7 +105,7 @@ export default function HomeScreen() {
       {/* Header */}
       <View
         accessibilityRole="header"
-        {...({ role: 'banner' } as any)}
+        {...(Platform.OS === 'web' ? ({ role: 'banner' } as any) : {})}
         style={[
           styles.header,
           {
@@ -141,7 +142,7 @@ export default function HomeScreen() {
             onPress={() => setSelectedLanguage(selectedLanguage === 'en' ? 'hi' : 'en')}
             accessibilityRole="button"
             accessibilityLabel="Toggle Language"
-            {...({ role: 'button' } as any)}
+            {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
           >
             <Text style={styles.langText}>
               {selectedLanguage === 'en' ? 'हिन्दी' : 'EN'}
@@ -153,8 +154,7 @@ export default function HomeScreen() {
 
       {/* Main Landmark Container */}
       <View
-        accessibilityRole="main"
-        {...({ role: 'main' } as any)}
+        {...(Platform.OS === 'web' ? ({ role: 'main' } as any) : {})}
         style={styles.mainContainer}
       >
         {/* Connectivity & Offline Banner */}
@@ -169,7 +169,7 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          {...({ tabIndex: 0, 'aria-label': 'Main Content' } as any)}
+          {...(Platform.OS === 'web' ? ({ tabIndex: 0, 'aria-label': 'Main Content' } as any) : {})}
         >
           {/* Urgent Primary SOS Trigger Banner */}
           <Pressable
@@ -177,7 +177,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/emergency')}
             accessibilityRole="button"
             accessibilityLabel="Open Emergency Assistance SOS"
-            {...({ role: 'button' } as any)}
+            {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
           >
             <View style={styles.sosBannerLeft}>
               <View style={styles.sosPulseIcon}>
@@ -206,7 +206,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/report')}
               accessibilityRole="button"
               accessibilityLabel="Report Hazard: Landslides, washouts, road blocks"
-              {...({ role: 'button' } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
             >
               <View style={[styles.tileIconCircle, { backgroundColor: Palette.saffronLight }]}>
                 <AlertTriangle size={22} color={Palette.saffron} />
@@ -233,7 +233,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/community' as any)}
               accessibilityRole="button"
               accessibilityLabel="Community Aid: Help exchange, local feed & volunteers"
-              {...({ role: 'button' } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
             >
               <View style={[styles.tileIconCircle, { backgroundColor: Palette.pineForestContainer }]}>
                 <Users size={22} color={Palette.pineForest} />
@@ -260,7 +260,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/map')}
               accessibilityRole="button"
               accessibilityLabel="Hazard Map: Shelters, routes & blocked passes"
-              {...({ role: 'button' } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
             >
               <View style={[styles.tileIconCircle, { backgroundColor: Palette.infoBlueLight }]}>
                 <MapPin size={22} color={Palette.infoBlue} />
@@ -287,7 +287,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/control-room' as any)}
               accessibilityRole="button"
               accessibilityLabel="Control Room: DDMA & SDRF incident verification"
-              {...({ role: 'button' } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
             >
               <View style={[styles.tileIconCircle, { backgroundColor: Palette.verifiedGreenLight }]}>
                 <Building2 size={22} color={Palette.verifiedGreen} />
@@ -318,7 +318,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/map')}
               accessibilityRole="link"
               accessibilityLabel="View Hazards Map"
-              {...({ role: 'link' } as any)}
+              {...(Platform.OS === 'web' ? ({ role: 'link' } as any) : {})}
             >
               <Text style={styles.viewAllText}>View Map →</Text>
             </Pressable>
@@ -379,7 +379,7 @@ export default function HomeScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.guidesScroll}
-            {...({ tabIndex: 0, 'aria-label': 'Offline Mountain Safety Guides' } as any)}
+            {...(Platform.OS === 'web' ? ({ tabIndex: 0, 'aria-label': 'Offline Mountain Safety Guides' } as any) : {})}
           >
             {MOUNTAIN_SAFETY_GUIDES.map((guide) => (
               <View
@@ -439,7 +439,7 @@ export default function HomeScreen() {
                   onPress={() => Linking.openURL(`tel:${c.phoneNumber}`)}
                   accessibilityRole="button"
                   accessibilityLabel={`Call ${c.authorityName} at ${c.phoneNumber}`}
-                  {...({ role: 'button' } as any)}
+                  {...(Platform.OS === 'web' ? ({ role: 'button' } as any) : {})}
                 >
                   <PhoneCall size={16} color={Palette.rescueRed} />
                   <View style={styles.hotlineCardText}>

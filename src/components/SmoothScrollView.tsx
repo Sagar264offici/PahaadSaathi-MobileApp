@@ -1,4 +1,4 @@
-import { ScrollView, type ScrollViewProps } from 'react-native';
+import { Platform, ScrollView, type ScrollViewProps } from 'react-native';
 
 export function SmoothScrollView(props: ScrollViewProps) {
   return (
@@ -8,7 +8,7 @@ export function SmoothScrollView(props: ScrollViewProps) {
       keyboardDismissMode="on-drag"
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
-      {...({ tabIndex: 0 } as any)}
+      {...(Platform.OS === 'web' ? ({ tabIndex: 0 } as any) : {})}
       {...props}
     />
   );
